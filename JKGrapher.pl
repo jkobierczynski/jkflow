@@ -217,25 +217,23 @@ sub showMenu {
 				-values => [sort keys %reportName],
 				-default => '' ) );
 
-	my %hours = ( 	6 => '6 hours',
-    		  	12 => '12 hours',
-			24 => '1 day',
-			36 => '1,5 days',
-			48 => '2 days',
-			72 => '3 days',
-			96 => '4 days',
-			120 => '5 days',
-			168 => '1 week',
-			336 => '2 weeks',
-			504 => '3 weeks',
-			720 => '1 month' );
+#	my %hours = ( 	6 => '6 hours',
+#   		  	12 => '12 hours',
+#			24 => '1 day',
+#			36 => '1,5 days',
+#			48 => '2 days',
+#			72 => '3 days',
+#			96 => '4 days',
+#			120 => '5 days',
+#			168 => '1 week',
+#			336 => '2 weeks',
+#			504 => '3 weeks',
+#			720 => '1 month' );
 
 	print $q->td( { -align => 'right' },
 		"Time period: ",
-		$q->popup_menu( -name => 'hours',
-				-values => [sort {$a <=> $b} keys %hours],
-				-default => $hours,
-				-labels => \%hours ) );
+		$q->textfield( -name => 'hours',
+				-value => 24 ) );
     
 	print $q->td( { -rowspan => '1' },
 		"Image type: ",
@@ -259,9 +257,8 @@ sub showMenu {
 	print $q->start_Tr( { -align => 'center' } );
 	print $q->td( { -align => 'right' },
 		"Duration: ",
-		$q->popup_menu( -name => 'duration',
-				-values => ['', sort {$a <=> $b} keys %hours],
-				-labels => \%hours ) );
+		$q->textfield( -name => 'duration',
+				-value => 24 ) );
 	
 	print $q->td( { -rowspan => '1' },
 		"Predefined Colors: ",
