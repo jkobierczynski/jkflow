@@ -806,7 +806,10 @@ sub report {
 	}  
 	
 	if (${$JKFlow::mylist{'all'}}{'write'} eq 'yes') {
-		reporttorrdfiles($self,"",\%{$JKFlow::mylist{'all'}});
+		if (! -d $JKFlow::OUTDIR."/all" ) {
+			mkdir($JKFlow::OUTDIR."/all",0755);
+		}
+		reporttorrdfiles($self,"/all",\%{$JKFlow::mylist{'all'}});
 	}
 
 	if (! -d $JKFlow::OUTDIR."/total_router" ) {
