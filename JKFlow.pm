@@ -109,7 +109,8 @@ my($config);
 
 my($flowrate) = 1;
 
-$JKFlow::multicast = 0;		# Do multicast? Default no.
+$JKFlow::directionroutersgroupsonly = 0;	# Are there directions with only routergroup attributes?
+$JKFlow::multicast = 0;				# Do multicast? Default no.
 
 # Multicast address spec's, taken from CampusIO
 $JKFlow::MCAST_NET  = unpack('N', inet_aton('224.0.0.0'));
@@ -191,71 +192,64 @@ sub parseConfig {
 
 	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
 	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
-	
+
+	createwanted();
 }
 
 sub parseDirection {
 my $refxml=shift;
 my $ref=shift;
 
-		if (defined $refxml->{set}) {
-			foreach my $set (keys %{$refxml->{set}}) {
-				print "parseDirection: ".$set."\n";
-				parseDirection(
-					\%{$config->{definesets}{defineset}{$set}},
-					$ref);
-			}
+	if (defined $refxml->{set}) {
+		foreach my $set (keys %{$refxml->{set}}) {
+			print "parseDirection: ".$set."\n";
+			parseDirection(
+				\%{$config->{definesets}{defineset}{$set}},
+				$ref);
 		}
-		pushServices(
-			$refxml->{services},
-			\%{$ref->{service}});
-		pushProtocols(
-			$refxml->{protocols},
-			\%{$ref->{protocol}});
-		if (defined $refxml->{direction}) { 
-			if (!defined $ref->{direction}) {
-				$ref->{direction}={};
-			}
-			pushDirections(
-				$refxml->{direction},
-				\%{$ref->{direction}});
-
+	}
+	pushServices(
+		$refxml->{services},
+		\%{$ref->{service}});
+	pushProtocols(
+		$refxml->{protocols},
+		\%{$ref->{protocol}});
+	if (defined $refxml->{direction}) {
+		if (!defined $ref->{direction}) {
+			$ref->{direction}={};
 		}
-		if (defined $refxml->{application}) { 
-			if (!defined $ref->{application}) {
-				$ref->{application}={};
-			}
-			pushApplications( 
-				$refxml->{application},
-				\%{$ref->{application}});
+		pushDirections(
+			$refxml->{direction},
+			\%{$ref->{direction}});
 		}
-		if (defined $refxml->{ftp} && !defined $ref->{ftp}) {
-			$ref->{ftp}={};
+	if (defined $refxml->{application}) {
+		if (!defined $ref->{application}) {
+			$ref->{application}={};
 		}
-		if (defined $refxml->{multicast} && !defined $ref->{multicast}) {
-			$ref->{multicast}={};
+		pushApplications(
+			$refxml->{application},
+			\%{$ref->{application}});
+	}
+	if (defined $refxml->{ftp} && !defined $ref->{ftp}) {
+		$ref->{ftp}={};
+	}
+	if (defined $refxml->{multicast} && !defined $ref->{multicast}) {
+		$ref->{multicast}={};
+	}
+	if (defined $refxml->{tos} && !defined $ref->{tos}) {
+		$ref->{tos}={};
+	}
+	if (defined $refxml->{total} && !defined $ref->{total}) {
+		$ref->{total}={};
+	}
+	if (defined $refxml->{scoreboard}) {
+		if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
+			$ref->{scoreboard}{hosts}={};
 		}
-		if (defined $refxml->{tos} && !defined $ref->{tos}) {
-			$ref->{tos}={};
+		if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
+			$ref->{scoreboard}{ports}={};
 		}
-		if (defined $refxml->{total} && !defined $ref->{total}) {
-			$ref->{total}={};
-		}
-		if (defined $refxml->{scoreboard}) {
-			if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
-				$ref->{scoreboard}{hosts}={};
-			}
-			if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
-				$ref->{scoreboard}{ports}={};
-			}
-		}
-		if (defined $refxml->{write}) {
-			$ref->{write}=$refxml->{write};
- 		} else {
-			$ref->{write}="yes";
-		}
-		#use Data::Dumper;
-		#print Dumper($ref);
+	}
 }
 
 sub pushProtocols {
@@ -531,11 +525,8 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if ($refxml->{$direction}{'monitor'} eq 'yes') {
-			$ref->{$direction}{monitor}="Yes";
-		} else {
-			$ref->{$direction}{monitor}="No";
-		}
+		generateCountPackets(\%{$JKFlow::mylist{all}});
+		$JKFlow::mylist{all}{countfunction}=\&countFunction1;
 
 		if (defined $refxml->{$direction}{"routergroup"}) {
 			my $routergroup=$refxml->{$direction}{"routergroup"};
@@ -579,6 +570,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			!defined $refxml->{$direction}{'to'} &&
 			!defined $refxml->{$direction}{'nofrom'} &&
 			!defined $refxml->{$direction}{'noto'}) {
+			$JKFlow::directionroutersgroupsonly=1;
 			my $list=[];
 			my $routergroup=$refxml->{$direction}{"routergroup"};
 			if (defined $JKFlow::mylist{routergroup}{$routergroup}) {
@@ -588,9 +580,12 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			push @{$list},$ref->{$direction};
 			$JKFlow::mylist{routergroup}{$routergroup}=$list;
 		}
-		parseDirection (
-		\%{$refxml->{$direction}},
-		\%{$ref->{$direction}});
+
+		parseDirection (\%{$refxml->{$direction}}, \%{$ref->{$direction}});
+		generateCountPackets(\%{$ref->{$direction}});
+		#use Data::Dumper;
+		#print Dumper($ref->{$direction});
+
 	}
 }
 
@@ -625,8 +620,6 @@ my %seen=();
 	}
 }
 
-
-
 sub new {
    my $self = {};
    my $class = shift;
@@ -642,38 +635,40 @@ sub _init {
 
 # This is called once per flow record, more than 800k times per file. It
 # needs to be as fast and as short as possible.
-sub wanted {
-    my $self = shift;
 
-	# Counting ALL
+sub createwanted {
+	my $createwanted='sub wanted {
+	my $self = shift;
+
+';
 	if (defined $JKFlow::mylist{'all'}) {
-		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
-			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
-			   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
-				countpackets(\%{$JKFlow::mylist{'all'}},'out');
-				countApplications(\%{$JKFlow::mylist{'all'}{'application'}},'out');
-				#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},'out');
-			} 
-			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
-			   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
-				countpackets(\%{$JKFlow::mylist{'all'}},'in');
-				countApplications(\%{$JKFlow::mylist{'all'}{'application'}},'in');
-				#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},'in');
-			} 
+	$createwanted.= <<'EOF';
+	# Counting ALL
+	if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
+		if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
+		   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
+			&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'out');
+		}
+		if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
+		   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
+			&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'in');
 		}
 	}
 	#print "Exporter:".$exporterip." Interface:".$output_if."\n";
 
+EOF
+	}
+
+	if ($JKFlow::directionroutersgroupsonly == 1) {
+	$createwanted.= <<'EOF';
 	# Counting for Routers
 	if (defined $JKFlow::mylist{routers}{router}{$exporterip}) {
-		#my $routergroup = $JKFlow::mylist{routers}{router}{$exporterip};
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$output_if}) {
 			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$output_if}{routergroups}}) {
 				#use Data::Dumper;
 				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
 				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					countpackets(\%{$ref},'out');
-					countApplications(\%{$ref->{'application'}},'out');
+					&{$ref->{countpackets}}(\%{$ref},'out');
 				}
 			}
 		}
@@ -682,8 +677,7 @@ sub wanted {
 				#use Data::Dumper;
 				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
 				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					countpackets(\%{$ref},'in');
-					countApplications(\%{$ref->{'application'}},'in');
+					&{$ref->{countpackets}}(\%{$ref},'in');
 				}
 			}
 		}
@@ -692,8 +686,7 @@ sub wanted {
 			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
 				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
 					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					countpackets(\%{$ref},'in');
-					countApplications(\%{$ref->{'application'}},'in');
+					&{$ref->{countpackets}}(\%{$ref},'in');
 					}
 				}
 			}
@@ -701,24 +694,27 @@ sub wanted {
 			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
 				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
 					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					countpackets(\%{$ref},'out');
-					countApplications(\%{$ref->{'application'}},'out');
+					&{$ref->{countpackets}}(\%{$ref},'out');
 					}
 				}
 			}
 		}
 	}
 
-	countDirections2();
-
-    return 1;
+EOF
+	}
+	$createwanted.= <<'EOF';
+	countDirections();
+	return 1;
+}
+EOF
+	eval $createwanted;
 }
 
 sub countFunction1($direction,$which) {
 	my $direction=shift;
 	my $which=shift;
-	countpackets (\%{$direction},$which);
-	countApplications (\%{$direction->{'application'}},$which);
+	&{$direction->{countpackets}}(\%{$direction},$which);
 }
 
 sub countFunction2($direction,$which) {
@@ -726,72 +722,29 @@ sub countFunction2($direction,$which) {
 	my $which=shift;
 	if (	defined $direction->{router}{$exporterip} &&
 		defined $direction->{router}{$exporterip}{$input_if}) {
-			countpackets(\%{$direction},'in');
-			countApplications(\%{$direction->{'application'}},'in');
+			&{$direction->{countpackets}}(\%{$direction},'in');
 	}
 	if (	defined $direction->{router}{$exporterip} &&
 		defined $direction->{router}{$exporterip}{$output_if}) {
-			countpackets(\%{$direction},'out');
-			countApplications(\%{$direction->{'application'}},'out');
+			&{$direction->{countpackets}}(\%{$direction},'out');
 	}
 	if (	defined $direction->{router}{$exporterip}{localsubnets}) {
 		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
 		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
-				countpackets(\%{$direction},'in');
-				countApplications(\%{$direction->{'application'}},'in');
+				&{$direction->{countpackets}}(\%{$direction},'in');
 		}
 		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr) &&
 		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
-				countpackets(\%{$direction},'out');
-				countApplications(\%{$direction->{'application'}},'out');
+				&{$direction->{countpackets}}(\%{$direction},'out');
 		}
 	}
 }
 
 sub countDirections {
-my $ref=shift;
-my $which=shift;
-
-	foreach my $direction (keys %{$ref}) {
-		if ( (!defined $ref->{$direction}{'tosubnets'} || ($dstsubnet=${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
-		&&  (!defined $ref->{$direction}{'fromsubnets'} || ($srcsubnet=${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)))
-		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($dstaddr))) 
-		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($srcaddr))) )
-		{
-				if ($ref->{$direction}{monitor} eq "Yes") {
-					print "D1 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
-				}
-				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
-				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
-    				#use Data::Dumper;
-    				#print Dumper(%{$ref->{$direction}})."\n";
-	 			#countpackets (\%{$ref->{$direction}},'out');
-				#countApplications(\%{$ref->{$direction}{'application'}},'out');
-		}
-		elsif ( (!defined $ref->{$direction}{'fromsubnets'} || ($dstsubnet=${$ref->{$direction}{'fromsubnets'}}->match_integer($dstaddr)))
-		&&  (!defined $ref->{$direction}{'tosubnets'} || ($srcsubnet=${$ref->{$direction}{'tosubnets'}}->match_integer($srcaddr)))
-		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($dstaddr)))
-		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($srcaddr))) ) 
-		{
-				if ($ref->{$direction}{monitor} eq "Yes") {
-					print "D1 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
-				}
-				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
-				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
-    				#use Data::Dumper;
-    				#print Dumper(%{$ref->{$direction}})."\n";
-	 			#countpackets (\%{$ref->{$direction}},'in');
-				#countApplications(\%{$ref->{$direction}{application}},'in');
-		}
-		countDirections(\%{$ref->{$direction}{'direction'}},$which);
-	}
-}
-
-sub countDirections2 {
 
 	my $srcsubnets;
 	my $dstsubnets;
-	
+
 	my $fromtriematch = $JKFlow::fromtrie->match_integer($srcaddr);
 	my $totriematch = $JKFlow::totrie->match_integer($dstaddr);
 
@@ -807,13 +760,8 @@ sub countDirections2 {
 							if (	
 							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
 							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
-								if ($direction->{ref}{monitor} eq "Yes") {
-									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet."\n"; 
-								}
 								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
 								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'out');
-                        					#countpackets (\$direction->{ref}},'out');
-								#countApplications (\%{$direction->{ref}{application}},'out');
 							}
 						}
 					}
@@ -837,13 +785,8 @@ sub countDirections2 {
 							if (
 							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
 							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
-								if ($direction->{ref}{monitor} eq "Yes") {
-									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = ".$srcsubnet.", EXPORTER = ".$exporter. "\n"; 
-								}
 								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
 								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'in');
-								#countpackets (\%{$direction->{ref}},'in');
-								#countApplications (\%{$direction->{ref}{application}},'in');
 							}
 						}
 					}
@@ -853,58 +796,64 @@ sub countDirections2 {
         }
 }
 
-sub countApplications {
-    	my $ref = shift;
-    	my $which = shift;
-    	my $typeos;
-	foreach my $application (keys %{$ref}) {
-		if (		(defined $ref->{$application}{'service'}) 
-			&& 	(defined $ref->{$application}{'service'}{$protocol})) {
-			if (defined $ref->{$application}{'service'}{$protocol}{$dstport}) {
-				$ref->{$application}{'dst'}{$which}{'flows'}++;
-				$ref->{$application}{'dst'}{$which}{'bytes'} += $bytes;
-				$ref->{$application}{'dst'}{$which}{'pkts'} += $pkts;
-			}
-			elsif (defined $ref->{$application}{'service'}{$protocol}{$srcport}) {
-				$ref->{$application}{'src'}{$which}{'flows'}++;
-				$ref->{$application}{'src'}{$which}{'bytes'} += $bytes;
-				$ref->{$application}{'src'}{$which}{'pkts'} += $pkts;
-			}
-		}
-	}
-}
+sub generateCountPackets {
 
-sub countpackets {
-    	my $ref = shift;
-    	my $which = shift;
-    	my $typeos;
-	if (defined $ref->{'total'}) {
-		$ref->{'total'}{$which}{'flows'} ++;
-		$ref->{'total'}{$which}{'bytes'} += $bytes;
-		$ref->{'total'}{$which}{'pkts'} += $pkts;
-	}
+	my $ref=shift;
+	my $countpackets='sub {
+	my $ref=shift;
+	my $which=shift;
+	my $typeos;
+
 	if ($tos == 0) {
 		$typeos="normal";
-    	} else {
-       		$typeos="other"; 
-    	}
-	if (defined $ref->{'tos'}) {
-    		$ref->{'tos'}{$typeos}{$which}{'flows'} ++;
-		$ref->{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
-		$ref->{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
+	} else {
+		$typeos="other";
 	}
-	if (defined $ref->{'multicast'} && 
-		(($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET)) {
+';
+
+	if (defined $ref->{'total'}) {
+	$countpackets.= <<'EOF';
+	$ref->{'total'}{$which}{'flows'} ++;
+	$ref->{'total'}{$which}{'bytes'} += $bytes;
+	$ref->{'total'}{$which}{'pkts'} += $pkts;
+
+EOF
+	}
+
+	if (defined $ref->{'tos'}) {
+	$countpackets.= <<'EOF';
+	$ref->{'tos'}{$typeos}{$which}{'flows'} ++;
+	$ref->{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
+	$ref->{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
+
+EOF
+	}
+
+	if (defined $ref->{'multicast'}) {
+	$countpackets.= <<'EOF';
+	if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
 		$ref->{'multicast'}{'total'}{$which}{'flows'}++;
 		$ref->{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
 		$ref->{'multicast'}{'total'}{$which}{'pkts'} += $pkts;
 	}
-	if ((defined $ref->{'protocol'}) && (defined $ref->{'protocol'}{$protocol})) {
-      		$ref->{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
+
+EOF
+	}
+
+	if (defined $ref->{'protocol'}) {
+	$countpackets.= <<'EOF';
+	if (defined $ref->{'protocol'}{$protocol}) {
+		$ref->{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'pkts'} += $pkts;
 	}
-	if ((defined $ref->{'service'}) && (defined $ref->{'service'}{$protocol})) {
+
+EOF
+	}
+
+	if (defined $ref->{'service'}) {
+	$countpackets.= <<'EOF';
+	if (defined $ref->{'service'}{$protocol}) {
 		if (defined $ref->{'service'}{$protocol}{$dstport}) {
 			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
 			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
@@ -916,27 +865,70 @@ sub countpackets {
 			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
 		}
 	}
+
+EOF
+	}
+
 	if (defined $ref->{'ftp'}) {
-       		countftp(\%{$ref->{'ftp'}},$which);
+	$countpackets.= <<'EOF';
+	countftp(\%{$ref->{'ftp'}},$which);
+
+EOF
 	}
-	if (defined $ref->{'scoreboard'}) {
-		if (defined $ref->{'scoreboard'}{hosts}) {
-			$ref->{'scoreboard'}{hosts}{'dst'}{'flows'}{$dstip}{$which} ++;
-			$ref->{'scoreboard'}{hosts}{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
-			$ref->{'scoreboard'}{hosts}{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
-			$ref->{'scoreboard'}{hosts}{'src'}{'flows'}{$srcip}{$which} ++;
-			$ref->{'scoreboard'}{hosts}{'src'}{'bytes'}{$srcip}{$which} += $bytes;
-			$ref->{'scoreboard'}{hosts}{'src'}{'pkts'}{$srcip}{$which} += $pkts;
-		}
-		if (defined $ref->{'scoreboard'}{ports}) {
-			$ref->{'scoreboard'}{ports}{'dst'}{'flows'}{$dstport}{$which} ++;
-			$ref->{'scoreboard'}{ports}{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
-			$ref->{'scoreboard'}{ports}{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
-			$ref->{'scoreboard'}{ports}{'src'}{'flows'}{$srcport}{$which} ++;
-			$ref->{'scoreboard'}{ports}{'src'}{'bytes'}{$srcport}{$which} += $bytes;
-			$ref->{'scoreboard'}{ports}{'src'}{'pkts'}{$srcport}{$which} += $pkts;
+
+	if (defined $ref->{'application'}) {
+	$countpackets.= <<'EOF';
+	foreach my $application (keys %{$ref->{'application'}}) {
+		if (		(defined $ref->{'application'}{$application}{'service'})
+			&& 	(defined $ref->{'application'}{$application}{'service'}{$protocol})) {
+			if (defined $ref->{'application'}{$application}{'service'}{$protocol}{$dstport}) {
+				$ref->{'application'}{$application}{'dst'}{$which}{'flows'}++;
+				$ref->{'application'}{$application}{'dst'}{$which}{'bytes'} += $bytes;
+				$ref->{'application'}{$application}{'dst'}{$which}{'pkts'} += $pkts;
+			}
+			elsif (defined $ref->{'application'}{$application}{'service'}{$protocol}{$srcport}) {
+				$ref->{'application'}{$application}{'src'}{$which}{'flows'}++;
+				$ref->{'application'}{$application}{'src'}{$which}{'bytes'} += $bytes;
+				$ref->{'application'}{$application}{'src'}{$which}{'pkts'} += $pkts;
+			}
 		}
 	}
+
+EOF
+	}
+
+	if (defined $ref->{'scoreboard'} && defined $ref->{'scoreboard'}{hosts}) {
+	$countpackets.= <<'EOF';
+	$ref->{'scoreboard'}{hosts}{'dst'}{'flows'}{$dstip}{$which} ++;
+	$ref->{'scoreboard'}{hosts}{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
+	$ref->{'scoreboard'}{hosts}{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
+	$ref->{'scoreboard'}{hosts}{'src'}{'flows'}{$srcip}{$which} ++;
+	$ref->{'scoreboard'}{hosts}{'src'}{'bytes'}{$srcip}{$which} += $bytes;
+	$ref->{'scoreboard'}{hosts}{'src'}{'pkts'}{$srcip}{$which} += $pkts;
+
+EOF
+	}
+
+	if (defined $ref->{'scoreboard'} && defined $ref->{'scoreboard'}{ports}) {
+	$countpackets.= <<'EOF';
+	$ref->{'scoreboard'}{ports}{'dst'}{'flows'}{$dstport}{$which} ++;
+	$ref->{'scoreboard'}{ports}{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
+	$ref->{'scoreboard'}{ports}{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
+	$ref->{'scoreboard'}{ports}{'src'}{'flows'}{$srcport}{$which} ++;
+	$ref->{'scoreboard'}{ports}{'src'}{'bytes'}{$srcport}{$which} += $bytes;
+	$ref->{'scoreboard'}{ports}{'src'}{'pkts'}{$srcport}{$which} += $pkts;
+
+EOF
+	}
+
+	if ($ref->{'monitor'} eq "yes") {
+	$countpackets.= <<'EOF';
+	print "SRC = ".inet_ntoa(pack(N,$srcaddr)).", DST = ".inet_ntoa(pack(N,$dstaddr))."\n";
+
+EOF
+	}
+	$countpackets.= "}";
+	$ref->{countpackets}=eval $countpackets;
 }
 
 sub countftp {
@@ -1110,7 +1102,7 @@ sub reporttorrdfiles {
 	}
 
 	if (defined $ref->{'scoreboard'}) {
-		scoreboard($self, \%{$ref->{'scoreboard'}}, $dir . "/" . $direction);
+		scoreboard($self, $dir . "/" . $direction, \%{$ref->{'scoreboard'}} );
 	}
 
 	if (defined $ref->{'direction'}) {
@@ -1135,7 +1127,7 @@ sub report {
 	my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
 	my $interf_name;
 
-	if (${$JKFlow::mylist{'all'}}{'write'} eq 'yes') {
+	if (defined $JKFlow::mylist{'all'}) {
 		if (! -d $JKFlow::RRDDIR."/all" ) {
 			mkdir($JKFlow::RRDDIR."/all",0755);
 		}
@@ -1143,9 +1135,9 @@ sub report {
 			mkdir($JKFlow::SCOREDIR."/all",0755);
 		}
 		reporttorrdfiles($self,"/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
-		if (defined $JKFlow::mylist{'all'}{scoreboard}) {
-			scoreboard($self, \%{$JKFlow::mylist{'all'}{scoreboard}}, "/all");
-		}
+		#if (defined $JKFlow::mylist{'all'}{scoreboard}) {
+		#	scoreboard($self, \%{$JKFlow::mylist{'all'}}, "/all");
+		#}
 	}
 
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
@@ -1358,8 +1350,8 @@ sub writeAggScoreboard (\%)
 # Handle writing our HTML scoreboard reports
 sub scoreboard {    
 	my $self = shift;
-	my $ref = shift;
 	my $dir = shift;
+	my $ref = shift;
 
 	my($i,$file,$item,$hr);
 	my (@values, @sorted);
@@ -1453,13 +1445,13 @@ sub scoreboard {
 						$item = $sorted[$i];
 	
 						if (!(defined($newaggdata{$item}))) { # Add this to aggdata 1x
-							$newaggdata{$type}{$item} = { 
-								'bytesin'  => $ref->{$type}{$srcdst}{bytes}{$item}{in},
-								'bytesout' => $ref->{$type}{$srcdst}{bytes}{$item}{out},
-								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in},
-								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out},
-								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in},
-								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out}
+							$newaggdata{$type}{$item} = {
+								'bytesin'  => $ref->{$type}{$srcdst}{bytes}{$item}{in} * $ref->{samplerate},
+								'bytesout' => $ref->{$type}{$srcdst}{bytes}{$item}{out} * $ref->{samplerate},
+								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in} * $ref->{samplerate},
+								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out} * $ref->{samplerate},
+								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in} * $ref->{samplerate},
+								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $ref->{samplerate}
 							};
 						}
 
