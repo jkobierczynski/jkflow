@@ -153,62 +153,68 @@ sub parseConfig {
 	}
 
 	#use Data::Dumper;
-	foreach my $router (keys %{$config->{routers}{router}}) {
-		my $routerip = $config->{routers}{router}{$router}{ipaddress};
-		$JKFlow::mylist{'router'}{$routerip}{'name'} = $router;
-
+	foreach my $routername (keys %{$config->{routers}{router}}) {
+		foreach my $router (split(/,/,$config->{routers}{router}{$routername}{routers})) {
+			print "Adding router $router \n";
+			$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
+		}
 		pushServices(
-			$config->{routers}{router}{$router}{services},
-			\%{$JKFlow::mylist{'router'}{$routerip}{'service'}});
+			$config->{routers}{router}{$routername}{services},
+			\%{$JKFlow::mylist{'router'}{$routername}{'service'}});
 		pushProtocols(
-			$config->{routers}{router}{$router}{protocols},
-			\%{$JKFlow::mylist{'router'}{$routerip}{'protocol'}});
+			$config->{routers}{router}{$routername}{protocols},
+			\%{$JKFlow::mylist{'router'}{$routername}{'protocol'}});
 		pushDirections(
-			$config->{routers}{router}{$router}{direction},
-			\%{$JKFlow::mylist{'router'}{$routerip}{'direction'}});
+			$config->{routers}{router}{$routername}{direction},
+			\%{$JKFlow::mylist{'router'}{$routername}{'direction'}});
 
-		if (defined $config->{routers}{router}{$router}{multicast}) {
-			$JKFlow::mylist{'router'}{$routerip}{'multicast'}={};
+		if (defined $config->{routers}{router}{$routername}{multicast}) {
+			$JKFlow::mylist{'router'}{$routername}{'multicast'}={};
 		}
-		if (defined $config->{routers}{router}{$router}{tos}) {
-			$JKFlow::mylist{'router'}{$routerip}{'tos'}={};
+		if (defined $config->{routers}{router}{$routername}{tos}) {
+			$JKFlow::mylist{'router'}{$routername}{'tos'}={};
 		}
-		if (defined $config->{routers}{router}{$router}{total}) {
-			$JKFlow::mylist{'router'}{$routerip}{'total'}={};
+		if (defined $config->{routers}{router}{$routername}{total}) {
+			$JKFlow::mylist{'router'}{$routername}{'total'}={};
 		}
-		if (defined $config->{routers}{router}{$router}{write}) {
-			$JKFlow::mylist{'router'}{$routerip}{'write'}=$config->{routers}{router}{$router}{write};
+		if (defined $config->{routers}{router}{$routername}{write}) {
+			$JKFlow::mylist{'router'}{$routername}{'write'}=$config->{routers}{router}{$routername}{write};
  		} else {
-			$JKFlow::mylist{'router'}{$routerip}{'write'}='yes';
+			$JKFlow::mylist{'router'}{$routername}{'write'}='yes';
 		}
 	}
 
-	foreach my $subnet (keys %{$config->{subnets}{subnet}}) {
-		$JKFlow::SUBNETS->add_string($subnet);
+	foreach my $subnetname (keys %{$config->{subnets}{subnet}}) {
+		${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		foreach my $subnet (split(/,/,$config->{subnets}{subnet}{$subnetname}{subnets})) {
+			print "Adding subnet $subnet \n";
+			${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->add_string($subnet);
+			$JKFlow::SUBNETS->add_string($subnet);
+		}
 
 		pushServices(
-			$config->{subnets}{subnet}{$subnet}{services},
-			\%{$JKFlow::mylist{'subnet'}{$subnet}{'service'}});
+			$config->{subnets}{subnet}{$subnetname}{services},
+			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'service'}});
 		pushProtocols(
-			$config->{subnets}{subnet}{$subnet}{protocols},
-			\%{$JKFlow::mylist{'subnet'}{$subnet}{'protocol'}});
+			$config->{subnets}{subnet}{$subnetname}{protocols},
+			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'protocol'}});
 		pushDirections(
-			$config->{subnets}{subnet}{$subnet}{direction},
-			\%{$JKFlow::mylist{'subnet'}{$subnet}{'direction'}});
+			$config->{subnets}{subnet}{$subnetname}{direction},
+			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}});
 
-		if (defined $config->{subnets}{subnet}{$subnet}{multicast}) {
-			$JKFlow::mylist{'subnet'}{$subnet}{'multicast'}={};
+		if (defined $config->{subnets}{subnet}{$subnetname}{multicast}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'multicast'}={};
 		}
-		if (defined $config->{subnets}{subnet}{$subnet}{tos}) {
-			$JKFlow::mylist{'subnet'}{$subnet}{'tos'}={};
+		if (defined $config->{subnets}{subnet}{$subnetname}{tos}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'tos'}={};
 		}
-		if (defined $config->{subnets}{subnet}{$subnet}{total}) {
-			$JKFlow::mylist{'subnet'}{$subnet}{'total'}={};
+		if (defined $config->{subnets}{subnet}{$subnetname}{total}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'total'}={};
 		}
-		if (defined $config->{subnets}{subnet}{$subnet}{write}) {
-			$JKFlow::mylist{'subnet'}{$subnet}{'write'}=$config->{subnets}{subnet}{$subnet}{write};
+		if (defined $config->{subnets}{subnet}{$subnetname}{write}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'write'}=$config->{subnets}{subnet}{$subnetname}{write};
  		} else {
-			$JKFlow::mylist{'subnet'}{$subnet}{'write'}="yes";
+			$JKFlow::mylist{'subnet'}{$subnetname}{'write'}="yes";
 		}
 	}
 
@@ -300,13 +306,23 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 	if (! defined $refxml->{'name'}) {
 		$refxml->{'name'}="default";
 	}
-	if (defined $refxml->{'fromsubnet'}) {
-		$ref->{$refxml->{'name'}}{'fromsubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		$ref->{$refxml->{'name'}}{'fromsubnet'}->add_string($refxml->{'fromsubnet'});
+	if (defined $refxml->{'fromsubnets'}) {
+		${$ref->{$refxml->{'name'}}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		foreach my $subnet (split(/,/,$refxml->{'fromsubnets'})) {
+			print "Adding subnet $subnet \n";
+			${$ref->{$refxml->{'name'}}{'fromsubnets'}}->add_string($subnet);
+		}
+	#	$ref->{$refxml->{'name'}}{'fromsubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
+	#	$ref->{$refxml->{'name'}}{'fromsubnet'}->add_string($refxml->{'fromsubnet'});
 	}
-	if (defined $refxml->{'tosubnet'}) { 
-		$ref->{$refxml->{'name'}}{'tosubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		$ref->{$refxml->{'name'}}{'tosubnet'}->add_string($refxml->{'tosubnet'});
+	if (defined $refxml->{'tosubnets'}) { 
+		${$ref->{$refxml->{'name'}}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		foreach my $subnet (split(/,/,$refxml->{'tosubnets'})) {
+			print "Adding subnet $subnet \n";
+			${$ref->{$refxml->{'name'}}{'tosubnets'}}->add_string($subnet);
+		}
+		#$ref->{$refxml->{'name'}}{'tosubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		#$ref->{$refxml->{'name'}}{'tosubnet'}->add_string($refxml->{'tosubnet'});
 	}
 	foreach my $application (keys %{$refxml->{'application'}}) {
 		foreach my $current (split(/,/,$refxml->{'application'}{$application}{'content'})) {
@@ -411,30 +427,31 @@ sub wanted {
 	}
 
 	# Counting for specific Routers
-	if (defined $JKFlow::mylist{'router'}{$exporterip}) {
-
-		countpackets(\%{$JKFlow::mylist{'router'}{$exporterip}},$which);
-		countDirections(\%{$JKFlow::mylist{'router'}{$exporterip}{'direction'}},$which);
-		#only $dstaddr can be a multicast address 
-    		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        		countmulticasts(\%{$JKFlow::mylist{'router'}{$exporterip}},$which);
+	foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
+		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
+			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
+			countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
+			#only $dstaddr can be a multicast address 
+ 	   		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
+        			countmulticasts(\%{$JKFlow::mylist{'router'}{$routername}},$which);
+			}
 		}
-
 	}
 
 	# Couting for specific Subnets
-   	if (($subnet = $JKFlow::SUBNETS->match_integer($dstaddr)) 
-	|| ($subnet = $JKFlow::SUBNETS->match_integer($srcaddr))) {
-
-		countpackets(\%{$JKFlow::mylist{'subnet'}{$subnet}},$which);
-		countDirections(\%{$JKFlow::mylist{'subnet'}{$subnet}{'direction'}},$which);
-		if ($subnet = $JKFlow::SUBNETS->match_integer($srcaddr)) {
-	    		$which = 'out';
-        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnet}},$which);
-		} else {
-			# Do we get directed broadcasts?
-	    		$which = 'in';
-			countmulticasts(\%{$JKFlow::mylist{'subnet'}{$JKFlow::SUBNETS->match_integer($dstaddr)}},$which);
+	foreach my $subnetname (keys %{$JKFlow::mylist{'subnet'}}) {
+	   	if (($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) 
+	   	|| ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr))) { 
+			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
+			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			if ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
+	    			$which = 'out';
+	        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
+			} else {
+				# Do we get directed broadcasts?
+		    		$which = 'in';
+				countmulticasts(\%{$JKFlow::mylist{'subnet'}{${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr)}},$which);
+			}
 		}
 	}
 	# Counting Directions for specific Networks
@@ -455,7 +472,7 @@ my $ref=shift;
 my $which=shift;
 
 	foreach my $direction (keys %{$ref}) {
-		if ((!defined $ref->{$direction}{'tosubnet'}) && (!defined $ref->{$direction}{'fromsubnet'})) {
+		if ((!defined $ref->{$direction}{'tosubnets'}) && (!defined $ref->{$direction}{'fromsubnets'})) {
 			#print "notosubnet, nofromsubnet\n";
     			#use Data::Dumper;
     			#print Dumper(%{$ref->{$direction}})."\n";
@@ -476,8 +493,8 @@ my $which=shift;
 				}
 			}
 		}
-		elsif ( (!defined $ref->{$direction}{'tosubnet'} || ($ref->{$direction}{'tosubnet'}->match_integer($dstaddr)))
-			 &&  (!defined $ref->{$direction}{'fromsubnet'} || ($ref->{$direction}{'fromsubnet'}->match_integer($srcaddr))) ) {
+		elsif ( (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
+			 &&  (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr))) ) {
 				#print "tosubnet".$ref->{$direction}{'tosubnet'}->match_integer($dstaddr).",";
 				#print "fromsubnet".$ref->{$direction}{'fromsubnet'}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
@@ -499,8 +516,8 @@ my $which=shift;
 					}
 				}
 		}
-		elsif ( (!defined $ref->{$direction}{'fromsubnet'} || ($ref->{$direction}{'fromsubnet'}->match_integer($dstaddr)))
-			 &&  (!defined $ref->{$direction}{'tosubnet'} || ($ref->{$direction}{'tosubnet'}->match_integer($srcaddr))) ) {
+		elsif ( (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($dstaddr)))
+			 &&  (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($srcaddr))) ) {
 				#print "fromsubnet".$ref->{$direction}{'fromsubnet'}->match_integer($dstaddr).",";
 				#print "tosubnet".$ref->{$direction}{'tosubnet'}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
@@ -804,12 +821,11 @@ sub report {
 
 	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
 		if (${$JKFlow::mylist{'router'}{$router}}{'write'} eq 'yes') {
-			($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
-			print "Router:$router , Routerdir:$routerdir \n";
-			if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
-				mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
+			print "Router:$router\n";
+			if (! -d $JKFlow::OUTDIR . "/router_$router" ) {
+				mkdir($JKFlow::OUTDIR . "/router_$router",0755);
 			}
-			reporttorrdfiles($self,"/router_".$routerdir,\%{$JKFlow::mylist{'router'}{$router}});
+			reporttorrdfiles($self,"/router_".$router,\%{$JKFlow::mylist{'router'}{$router}});
 		}
 	}
 

@@ -11,7 +11,7 @@
 		<total/>
 	</all>
 	<routers>
-		<router ipaddress="10.101.249.3" name="rtbru01" write="no">
+		<router routers="10.101.249.3" name="rtbru01" write="yes">
 			<direction>
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
@@ -19,7 +19,7 @@
 			<services>53/udp</services>
 			<protocols>tcp,udp,icmp</protocols>
 		</router>
-		<router ipaddress="10.101.249.2" name="rtbru02" write="no">
+		<router routers="10.101.249.2" name="rtbru02" write="yes">
 			<direction>
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
@@ -32,7 +32,7 @@
 		<total_router/>
 	</routers>
 	<subnets>
-		<subnet name="10.240.72.0/22" write="yes">
+		<subnet subnets="10.240.72.0/22,10.241.72.0/22" name="10.240.72.0/22" write="yes">
 			<direction>
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
@@ -43,7 +43,7 @@
 			<tos/>
 			<total/>
 		</subnet>
-		<subnet name="10.101.249.0/24" write="yes">
+		<subnet subnets="10.101.249.0/24,10.100.249.0/24" name="10.101.249.0/24" write="yes">
 			<direction>
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
@@ -74,7 +74,7 @@
 			<subnets>10.240.72.0/22,10.101.249.0/24</subnets>
 		</network>
 		<network name="Holland">
-			<direction name="Windows belgium-holland" fromsubnet="0.0.0.0/0" tosubnet="0.0.0.0/0">
+			<direction name="Windows belgium-holland" fromsubnets="0.0.0.0/0,0.0.0.0/0" tosubnets="0.0.0.0/0,0.0.0.0/0">
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
 				<services>21/tcp,53/udp,53/tcp</services>
