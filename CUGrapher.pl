@@ -54,8 +54,20 @@ my $debug;
 
 &getRouter();
 &getSubnet();
-&getProtocols();
-&getServices();
+&getProtocols("all","");
+&getServices("all","");
+    foreach my $r (@router) {
+	 &getProtocols($r,"router_");
+    }
+    foreach my $r (@subnet) {
+	 &getProtocols($r,"subnet_");
+    }
+    foreach my $r (@router) {
+	 &getServices($r,"router_");
+    }
+    foreach my $r (@subnet) {
+	 &getServices($r,"subnet_");
+    }
 &getTOS();
 &getNetworks();
 &getImageType();
@@ -165,6 +177,58 @@ sub showMenu {
 
     print $q->start_table( { align => 'center',
 			     -border => '1' } );
+
+    print $q->Tr( { -align => 'center' },
+		  $q->td( i('Global') ),
+		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
+		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
+		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
+		  $q->td( i('Network') ),
+		  $q->td( i('Total') ) );    
+
+    print $q->start_Tr;
+
+    print $q->td( { -align => 'center' }, "All",
+		      $q->hidden( -name => 'router', -default => "all" ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_protocol",
+				      -values => [sort &getProtocolList("")],
+				      -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_protocols",
+				-value => '1',
+				-label => 'Yes' ) );
+	
+    print $q->td( $q->scrolling_list( -name => "all_service",
+				      -values => [sort &getServiceList("")],
+				      -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_services",
+				-value => '1',
+				-label => 'Yes' ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_tos",
+				      -values => [sort &getTOSList("")],
+			              -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_tos",
+				-value => '1',
+				-label => 'Yes' ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_network",
+				      -values => [sort &getNetworkList()],
+				      -size => 5,
+			              -multiple => 'true' ) );
+	
+    print $q->td( $q->checkbox( -name => "all_total",
+				    -value => '1',
+				    -label => 'Yes') );
+	
+    print $q->end_Tr;
+
     print $q->Tr( { -align => 'center' },
 		  $q->td( i('Routers') ),
 		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
@@ -173,7 +237,8 @@ sub showMenu {
 		  $q->td( i('Network') ),
 		  $q->td( i('Total') ) );    
 
-    foreach my $router ( 'total', sort &getRouterList() ) {
+
+    foreach my $router (  sort &getRouterList() ) {
 	print $q->start_Tr;
 
 	print $q->td( { -align => 'center' }, $q->b($router),
@@ -198,7 +263,7 @@ sub showMenu {
 				    -label => 'Yes' ) );
 
 	print $q->td( $q->scrolling_list( -name => "${router}_tos",
-					  -values => [sort &getTOSList()],
+					  -values => [sort &getTOSList("router_".$router)],
 					  -size => 5,
 					  -multiple => 'true' ) );
 
@@ -230,7 +295,7 @@ sub showMenu {
 		  $q->td( i('Network') ),
 		  $q->td( i('Total') ) );    
 
-    foreach my $subnet ( "total", sort &getSubnetList() ) {
+    foreach my $subnet ( sort &getSubnetList() ) {
 	print $q->start_Tr;
 
 	print $q->td( { -align => 'center' }, $q->b($subnet),
@@ -255,7 +320,7 @@ sub showMenu {
 				    -label => 'Yes' ) );
 
 	print $q->td( $q->scrolling_list( -name => "${subnet}_tos",
-					  -values => [sort &getTOSList()],
+					  -values => [sort &getTOSList("subnet_".$subnet)],
 					  -size => 5,
 					  -multiple => 'true' ) );
 
@@ -277,7 +342,7 @@ sub showMenu {
 				    -label => 'Yes') );
 	
 	print $q->end_Tr;
-    }
+   }
     
     print $q->end_table();
     
@@ -319,7 +384,6 @@ sub getRouter {
     # XXX how much is tainting a problem? .. attacks, etc
     else {
 	foreach ( param('router') ) {
-            print $_."\n";
 	    s/\.\./_/g;
 	    if( $_ eq 'all' ) { push @router, 'all' }
 	    elsif( -d $rrddir.'/router_'.$_ ) { push @router, $_ }
@@ -335,7 +399,6 @@ sub getSubnet {
     # XXX how much is tainting a problem? .. attacks, etc
     else {
 	foreach ( param('subnet') ) {
-            print $_."\n";
 	    s/\.\./_/g;
 	    if( $_ eq 'all' ) { push @subnet, 'all' }
 	    elsif( -d $rrddir.'/subnet_'.$_ ) { push @subnet, $_ }
@@ -397,30 +460,46 @@ sub doReport {
 
 # Generate list of protocols and resolve filenames
 sub getProtocols {
-    foreach my $r (@router) {
-	if( param("${r}_all_protocols") ) {
-	    push @{$protocol{$r}}, &getProtocolList();
+    my $r=shift;
+    my $type=shift;
+#    foreach my $r (@router) {
+        if( $r == "all" && param("all_all_protocols") ) {
+	    push @{$protocol{$r}}, &getProtocolList("");
+	}
+      	elsif( param("${r}_all_protocols") ) {
+	    push @{$protocol{$r}}, &getProtocolList($type.$r);
 	}
 	elsif( param("${r}_protocol") ) {
 	    push @{$protocol{$r}}, param("${r}_protocol");
 	}
 	foreach my $p ( @{$protocol{$r}} ) {
 	    my $file;
-	    if( $r eq 'all' ) { $file = "${rrddir}/protocol_${p}.rrd"}
-	    else { $file =  "${rrddir}/${r}/protocol_${p}.rrd"}
+	    if( $r eq 'all' ) 
+		{
+		$file = "${rrddir}/protocol_${p}.rrd";
+		}
+	    else { $file =  "${rrddir}/${type}${r}/protocol_${p}.rrd"}
 	    -f $file or &browserDie("cannot find $file");
+
 	    $filename{$r}{$p} = $file;
 	}
 	if( $r eq 'all' ) { $filename{$r}{'total'} = "${rrddir}/total.rrd" }
-	else { $filename{$r}{'total'} = "${rrddir}/${r}/total.rrd" }
-    }
+	else { 
+		$filename{$r}{'total'} = "${rrddir}/${type}${r}/total.rrd";
+		 }
+#    }
 }
 
 # Generate list of services and resolve filenames
 sub getServices {
-    foreach my $r (@router) {
+    my $r=shift;
+    my $type=shift;
+#    foreach my $r (@router) {
+        if( $r == "all" && param("all_all_protocols") ) {
+	    push @{$protocol{$r}}, &getProtocolList("");
+	}
 	if( param("${r}_all_services") ) {
-	    push @{$service{$r}}, &getServiceList();
+	    push @{$service{$r}}, &getServiceList($type.$r);
 	}
 	elsif( param("${r}_service") ) {
 	    push @{$service{$r}}, param("${r}_service");
@@ -432,20 +511,22 @@ sub getServices {
 		$file_src = "${rrddir}/service_${s}_src.rrd";
 		$file_dst = "${rrddir}/service_${s}_dst.rrd";
 	    } else {
-		$file_base = "${rrddir}/${r}/service_${s}";
-		$file_src = "${rrddir}/${r}/service_${s}_src.rrd";
-		$file_dst = "${rrddir}/${r}/service_${s}_dst.rrd";
+		$file_base = "${rrddir}/${type}${r}/service_${s}";
+		$file_src = "${rrddir}/${type}${r}/service_${s}_src.rrd";
+		$file_dst = "${rrddir}/${type}${r}/service_${s}_dst.rrd";
 	    }
 	    -f $file_src or &browserDie("cannot find $file_src");
 	    -f $file_dst or &browserDie("cannot find $file_dst");
 	    $filename{$r}{$s} = $file_base;
 	}
-    }
+#    }
 }
 
 # Generate list of TOS and resolve filenames
 sub getTOS {
-    foreach my $r (@router) {
+    my $r=shift;
+    my $type=shift;
+#    foreach my $r (@router) {
 	if( param("${r}_all_tos") ) {
 	    push @{$tos{$r}}, &getTOSList();
 	}
@@ -455,13 +536,13 @@ sub getTOS {
 	foreach my $t ( @{$tos{$r}} ) {
 	    my $file;
 	    if( $r eq 'all' ) { $file = "${rrddir}/tos_${t}.rrd"}
-	    else { $file =  "${rrddir}/${r}/tos_${t}.rrd"}
+	    else { $file =  "${rrddir}/${type}${r}/tos_${t}.rrd"}
 	    -f $file or &browserDie("cannot find $file");
 	    $filename{$r}{$t} = $file;
 	}
 	if( $r eq 'all' ) { $filename{$r}{'total'} = "${rrddir}/total.rrd" }
-	else { $filename{$r}{'total'} = "${rrddir}/${r}/total.rrd" }
-    }
+	else { $filename{$r}{'total'} = "${rrddir}/${type}${r}/total.rrd" }
+#   }
 }
 # Generate list of networks and resolve filenames
 sub getNetworks {
