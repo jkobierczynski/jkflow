@@ -146,12 +146,13 @@ sub parseConfig {
 		} else {
 			$JKFlow::mylist{all}{samplerate}=1;
 		}
+		use Data::Dumper;
+		print Dumper(%{$config});
 		parseDirection (
 			\%{$config->{all}},
 			\%{$JKFlow::mylist{all}});
 	}
 
-	#use Data::Dumper;
 
 	if (defined $config->{routergroups}) {
 		if (defined $config->{routergroups}{routergroup}){
@@ -159,12 +160,23 @@ sub parseConfig {
 				print "Routergroup: $routergroup\n";
 				foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
 					print "Exporter: ".$exporter->{exporter}.", ";
-					$JKFlow::mylist{routers}{router}{$exporter->{exporter}}=$routergroup;
 					if (defined $exporter->{interface}) {
 						print "interface: ".$exporter->{interface};
-						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}=$routergroup;
-					} elsif (defined $exporter->{localsubnets}) {
+						my $list=[];
+						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}) {
+							push @{$list},$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups};
+						}
+						push @{$list},$routergroup;
+						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}=$list;
+					} 
+					if (defined $exporter->{localsubnets}) {
 						print "localsubnets: ".$exporter->{localsubnets};
+						my $list=[];
+						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}{routergroups}) {
+							push @{$list},$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups};
+						}
+						push @{$list},$routergroup;
+						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}=$list;
 						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
 						foreach my $localsubnet (split (/,/,$exporter->{localsubnets})) {
 							$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{localsubnets}->add_string($localsubnet);
@@ -222,25 +234,24 @@ sub parseConfig {
 		\%{$JKFlow::mylist{direction}});
 
 
-	foreach my $network (keys %{$config->{networks}{network}}) {
-		if (defined $config->{netwerks}{network}{$network}{direction}) { 
-			$JKFlow::mylist{'netwerk'}{$network}{'direction'}={};
-			pushDirections(
-				$config->{networks}{network}{$network}{direction},
-				\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
-		}
-		if (defined $config->{networks}{network}{$network}{routers}) {
-			foreach my $router (split(/,/,$config->{networks}{network}{$network}{routers})) {
-				$JKFlow::mylist{'network'}{$network}{'router'}{$router}={};
-			}
-		}
-		if (defined $config->{networks}{network}{$network}{subnets}) {
-			foreach my $subnet (split(/,/,$config->{networks}{network}{$network}{subnets})) {
-				$JKFlow::mylist{'network'}{$network}{'subnet'}{$subnet}={};
-			}
-		}
-
-	}	
+	#foreach my $network (keys %{$config->{networks}{network}}) {
+	#	if (defined $config->{netwerks}{network}{$network}{direction}) { 
+	#		$JKFlow::mylist{'netwerk'}{$network}{'direction'}={};
+	#		pushDirections(
+	#			$config->{networks}{network}{$network}{direction},
+	#			\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
+	#	}
+	#	if (defined $config->{networks}{network}{$network}{routers}) {
+	#		foreach my $router (split(/,/,$config->{networks}{network}{$network}{routers})) {
+	#			$JKFlow::mylist{'network'}{$network}{'router'}{$router}={};
+	#		}
+	#	}
+	#	if (defined $config->{networks}{network}{$network}{subnets}) {
+	#		foreach my $subnet (split(/,/,$config->{networks}{network}{$network}{subnets})) {
+	#			$JKFlow::mylist{'network'}{$network}{'subnet'}{$subnet}={};
+	#		}
+	#	}
+	#}	
 
 	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
 	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
@@ -248,9 +259,8 @@ sub parseConfig {
 	if (defined $config->{router}{total_router}) {
 		$JKFlow::mylist{'total_router'} = {};
 	}	
-	#use Data::Dumper;
-	#print Dumper($JKFlow::mylist{routergroup});
-	#print Dumper($JKFlow::mylist{direction});
+	use Data::Dumper;
+	print Dumper($JKFlow::mylist{all});
 }
 
 sub parseDirection {
@@ -527,15 +537,23 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		parseDirection (
 			\%{$refxml->{$direction}},
 			\%{$ref->{$direction}});
-		
+	
 		if (defined $refxml->{$direction}{"routergroup"}) {
-			print "push direction to routergroup\n";
-			if (defined $JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}) {
-				die "You can assign routergroup ".$refxml->{$direction}{"routergroup"}." only once!\n";
-			}
+			my $list=[];
+			$list=$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}};
 			print "Assign routergroup ".$refxml->{$direction}{"routergroup"}." to ".$direction."\n";
-			$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=\%{$ref->{$direction}};
+			push @{$list},$ref->{$direction};
+			$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=$list;
 		}
+	
+		#if (defined $refxml->{$direction}{"routergroup"}) {
+		#	print "push direction to routergroup\n";
+		#	if (defined $JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}) {
+		#		die "You can assign routergroup ".$refxml->{$direction}{"routergroup"}." only once!\n";
+		#	}
+		#	print "Assign routergroup ".$refxml->{$direction}{"routergroup"}." to ".$direction."\n";
+		#	$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=\%{$ref->{$direction}};
+		#}
 
 	}
 }
@@ -611,26 +629,36 @@ sub wanted {
 	if (defined $JKFlow::mylist{routers}{router}{$exporterip}) {
 		my $routergroup = $JKFlow::mylist{routers}{router}{$exporterip};
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$output_if}) {
-			#use Data::Dumper;
-			#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
-				countpackets(\%{$JKFlow::mylist{routergroup}{$routergroup}},'out');
-				countApplications(\%{$JKFlow::mylist{routergroup}{$routergroup}{'application'}},'out');
+			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$output_if}{routergroups}}) {
+				#use Data::Dumper;
+				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
+				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets(\%{$ref},'out');
+					countApplications(\%{$ref->{'application'}},'out');
+				}
+			}
 		}
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$input_if}) {
-			#use Data::Dumper;
-			#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
-				countpackets(\%{$JKFlow::mylist{routergroup}{$routergroup}},'in');
-				countApplications(\%{$JKFlow::mylist{routergroup}{$routergroup}{'application'}},'in');
+			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$input_if}{routergroups}}) {
+				#use Data::Dumper;
+				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
+				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets(\%{$ref},'in');
+					countApplications(\%{$ref->{'application'}},'in');
+				}
+			}
 		} 
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}) {
-			#use Data::Dumper;
-			#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
 			$which = 'out';
 			if ($JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
 				$which = 'in';
 			}
-				countpackets(\%{$JKFlow::mylist{routergroup}{$routergroup}},$which);
-				countApplications(\%{$JKFlow::mylist{routergroup}{$routergroup}{'application'}},$which);
+			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
+				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+				countpackets(\%{$ref},$which);
+				countApplications(\%{$ref->{'application'}},$which);
+				}
+			}
 		}
 	}
 
