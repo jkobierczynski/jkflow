@@ -218,9 +218,7 @@ sub showMenu {
 				-default => '' ) );
 
 	my %hours = ( 	6 => '6 hours',
-    		  	9 => '9 hours',
     		  	12 => '12 hours',
-    		  	18 => '18 hours',
 			24 => '1 day',
 			36 => '1,5 days',
 			48 => '2 days',
@@ -228,11 +226,8 @@ sub showMenu {
 			96 => '4 days',
 			120 => '5 days',
 			168 => '1 week',
-			252 => '1,5 week',
 			336 => '2 weeks',
-			420 => '2,5 weeks',
 			504 => '3 weeks',
-			588 => '3,5 weeks',
 			720 => '1 month' );
 
 	print $q->td( { -align => 'right' },
@@ -292,7 +287,7 @@ sub showMenu {
 		$q->td( i('Protocol') ), $q->td( i('All Protos') ),
 		$q->td( i('Service') ), $q->td( i('All Svcs') ),
 		$q->td( i('TOS') ), $q->td( i('All TOS') ),
-		$q->td( i('Total') ) );
+		$q->td( i('Total') ) );    
 
 	foreach my $r (param('subdir')) {
 		print $q->start_Tr;
@@ -826,16 +821,12 @@ sub io_report {
 		 "--height=${height}",
 		 '--alt-autoscale');
 
-	my $previousr="##########################";
 	$deftotalout='CDEF:'.&cleanDEF("total_out_${reportType}").'=0,';
 	$deftotalin='CDEF:'.&cleanDEF("total_in_${reportType}").'=0,';
-	foreach my $r (sort keys %subdir) {
-		if ("$r" !~ /$previousr/) {
-			$previousr=$r;
-			subtotal(\@arg,$r,$reportType);
-			$deftotalout.=&cleanDEF("${r}_total_out_${reportType}").',+,';
-			$deftotalin.=&cleanDEF("${r}_total_in_${reportType}").',+,';
-		}
+	foreach my $r (keys %subdir) {
+		subtotal(\@arg,$r,$reportType);
+		$deftotalout.=&cleanDEF("${r}_total_out_${reportType}").',+,';
+		$deftotalin.=&cleanDEF("${r}_total_in_${reportType}").',+,';
 	}
 	push @arg, $deftotalout, $deftotalin;
 

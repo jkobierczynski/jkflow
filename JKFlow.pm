@@ -22,7 +22,7 @@
 # ICMP type handling as a Service, ie 6/icmp Echo
 # Make Networks record services? How, while still being fast?
 
-use strict;
+#use strict;
 use Data::Dumper;
 
 package JKFlow;
@@ -79,6 +79,7 @@ use Net::Patricia;		# Fast IP/mask lookups
 use POSIX;			# We need floor()
 use FindBin;			# To find our executable
 use XML::Simple;
+	my $counterke;
 
 my(%ROUTERS);			# A hash mapping exporter IP's to the name
 				# we want them to be called, e.g.
@@ -102,6 +103,8 @@ $JKFlow::MCAST_NET  = unpack('N', inet_aton('224.0.0.0'));
 $JKFlow::MCAST_MASK = unpack('N', inet_aton('240.0.0.0'));
 
 $JKFlow::SUBNETS = new Net::Patricia || die "Could not create a trie ($!)\n";
+$JKFlow::fromtrie = new Net::Patricia || die "Could not create a trie ($!)\n";
+$JKFlow::totrie = new Net::Patricia || die "Could not create a trie ($!)\n";
 &parseConfig;	# Read our config file
 
 sub parseConfig {
@@ -391,6 +394,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		if (! defined $refxml->{'name'}) {
 			$refxml->{'name'}="default";
 		}
+		
 		if (defined $refxml->{$direction}{'fromsubnets'}) {
 			${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'fromsubnets'})) {
@@ -419,6 +423,60 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 			}
 		}
+
+		#NEW CODE
+		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
+			foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
+				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$ref->{$direction};
+			}
+		}
+
+		foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
+			my @list = ();
+			if (defined $JKFlow::fromtrie->match_string($nofromsubnet)) {
+				my @list = @{$JKFlow::fromtrie->match_string($nofromsubnet)};
+			}
+			$JKFlow::fromtrie->add_string($nofromsubnet,\@list);
+		}
+
+		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
+			my @list = ();
+			if (defined $JKFlow::fromtrie->match_string($fromsubnet)) {
+				my @tmplist = @{$JKFlow::fromtrie->match_string($fromsubnet)};
+				if (defined $tmplist[0]) {
+					use Data::Dumper;
+					print Dumper(@tmplist)."\n";
+					push @list,  @tmplist;
+				}
+			}
+			push @list, $fromsubnet;
+			$JKFlow::fromtrie->add_string($fromsubnet,\@list);
+		}
+
+		foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
+			my @list = ();
+                        if (defined $JKFlow::totrie->match_string($notosubnet)) {
+				my @list = @{$JKFlow::totrie->match_string($notosubnet)};
+			}
+			$JKFlow::totrie->add_string($notosubnet,\@list);
+		}
+
+		foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
+			my @list = ();
+                     	if (defined $JKFlow::totrie->match_string($tosubnet)) {
+				my @tmplist = @{$JKFlow::totrie->match_string($tosubnet)};
+				if (defined $tmplist[0]) {
+					use Data::Dumper;
+					print Dumper(@tmplist)."\n";
+					push @list,  @tmplist;
+				}
+			}
+			push @list, $tosubnet;
+			$JKFlow::totrie->add_string($tosubnet,\@list);
+		}
+		#END NEW CODE
+
+
 		if (defined $refxml->{$direction}{'application'}) { 
 			$ref->{$direction}{application}={};
 			pushApplications( 
@@ -479,6 +537,8 @@ sub wanted {
     my $self = shift;
     my $which;
 
+	#$counterke++;
+	#print $counterke."\n";
 	# Counting ALL
 	if (defined $JKFlow::mylist{'all'}) {
 		$which = 'out';
@@ -489,7 +549,7 @@ sub wanted {
 		}
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
 		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
-		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
+		#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
 
 	}
 
@@ -504,7 +564,7 @@ sub wanted {
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
 		}
 	}
 	# Couting for specific Subnets
@@ -521,13 +581,13 @@ sub wanted {
 			$which = 'out';
 			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
 		}
 		elsif ($which eq 'in' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
 			$which = 'in';
 			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
 		}
 	}
 	# Counting Directions for specific Networks
@@ -535,8 +595,9 @@ sub wanted {
 	# the primary intended function of Networks is to be a compound of several
 	# Subnets/Routers
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-		countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
+		#countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
 	}
+	countDirections2();
 
     return 1;
 }
@@ -571,6 +632,35 @@ my $which=shift;
 		}
 		countDirections(\%{$ref->{$direction}{'direction'}},$which);
 	}
+}
+
+sub countDirections2 {
+
+	my $srcsubnets;
+	my $dstsubnets;
+	if (defined ($srcsubnets = $JKFlow::fromtrie->match_integer($srcaddr))) {
+		if (defined ($dstsubnets = $JKFlow::totrie->match_integer($dstaddr))) {
+			foreach my $srcsubnet (@{$srcsubnets}) {
+				foreach my $dstsubnet (@{$dstsubnets}) {
+					#print "SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
+					countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'out');
+					countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'out');
+				}
+			}
+		}
+	}
+
+        if (defined ($srcsubnets = $JKFlow::totrie->match_integer($srcaddr))) {
+        	if (defined ($dstsubnets = $JKFlow::fromtrie->match_integer($dstaddr))) {
+        		foreach my $srcsubnet (@{$srcsubnets}) {
+                		foreach my $dstsubnet (@{$dstsubnets}) {
+					#print "DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
+                        		countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'in');
+                        		countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'in');
+				}
+			}
+                }
+        }
 }
 
 sub countApplications {
