@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#!/usr/bin/perl -w
 
 # JKGrapher.pl
 # $Revision$
@@ -37,7 +37,9 @@ my %reportName = ( 'bits' => 'bits',
 		   'pkts' => 'packets',
 		   'flows' => 'flows' );
 
-unless( param() ) {
+if( !param() ) {
+    &showList();
+} elsif ( param("showlist") ) {
     &showMenu();
 }
 
@@ -90,6 +92,85 @@ sub generateImage {
     else {
 	print header, '<pre>', join(" \\\n", @args), "\n"; exit;
     }
+}
+
+sub showList {
+
+    my $q = new CGI::Pretty;
+    my @list;
+
+    print $q->header, $q->start_html( -title => 'Generate FlowScan graphs on the fly',
+				      -bgcolor => 'ffffff' );
+    
+    print $q->start_form( -action => $q->self_url, -method => 'get' );
+
+    print $q->start_table( { 	-align => 'center',
+				-border => '1'
+			     	-cellspacing => '10' } );
+
+    print $q->hidden( -name => 'showlist', -default => "1" ); 
+
+    print $q->Tr( { -align => 'center' },
+		 	$q->td( i('Type') ),
+		 	$q->td( i('Name') ),
+			$q->td( i('Selected') ) );    
+
+    print $q->start_Tr;
+
+    print $q->td( { -align => 'center' }, "Global" );
+    print $q->td( { -align => 'center' }, "All" );
+    print $q->td( $q->checkbox( -name => "Global",
+				-value => "All",
+				-label => 'Yes') );
+	 
+    print $q->end_Tr();
+
+    foreach my $type ( 'network', 'router', 'subnet' ) {
+
+	 if ($type eq 'network') { @list = getNetworkList(); } 
+ 	 if ($type eq 'router') { @list = getRouterList(); } 
+   	 if ($type eq 'subnet') { @list = getSubnetList(); } 
+     	 foreach my $r (  sort @list ) {
+
+	    print $q->start_Tr;
+
+ 	    print $q->td( { -align => 'center' }, $type);
+
+ 	    print $q->td( { -align => 'center' }, $r );
+
+            print $q->td( $q->checkbox( -name => $type,
+				    -value => $r,
+				    -label => 'Yes') );
+	 
+	    print $q->end_Tr();
+	 }
+         if ($type ne 'network') {
+	    print $q->start_Tr;
+
+ 	    print $q->td( { -align => 'center' }, $type);
+
+ 	    print $q->td( { -align => 'center' }, "total_".$type );
+
+            print $q->td( $q->checkbox( -name => $type."_total",
+				    -value => 1,
+				    -label => 'Yes') );
+	    print $q->end_Tr();
+         }
+         
+    }
+
+    print $q->end_Tr();
+
+    print $q->end_table();
+
+    print $q->center( $q->submit( -name => 'submit',
+				  -value => 'Select' ) );
+
+
+    print $q->end_form();
+
+    print $q->end_html;    
+    exit;
 }
 
 sub showMenu {
@@ -171,127 +252,101 @@ sub showMenu {
     print $q->start_table( { align => 'center',
 			     -border => '1' } );
 
-    print $q->Tr( { -align => 'center' },
+    if (param("total_all")) { 
+
+	print $q->Tr( { -align => 'center' },
 		  $q->td( i('Global') ),
 		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
 		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
 		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
 		  $q->td( i('Total') ) );    
 
-    print $q->start_Tr;
+	print $q->start_Tr;
 
-    print $q->td( { -align => 'center' }, "All",
-		      $q->hidden( -name => 'router', -default => "all" ) );
+	print $q->td( 	{ -align => 'center' }, "All",
+			$q->hidden( -name => 'router', -default => "all" ) );
 
-    print $q->td( $q->scrolling_list( -name => "all_protocol",
-				      -values => [sort &getProtocolList("")],
-				      -size => 5,
-				      -multiple => 'true' ) );
+	print $q->td(	$q->scrolling_list( -name => "all_protocol",
+			-values => [sort &getProtocolList("")],
+			-size => 5,
+			-multiple => 'true' ) );
 
-    print $q->td( $q->checkbox( -name => "all_all_protocols",
-				-value => '1',
-				-label => 'Yes' ) );
+	print $q->td(	$q->checkbox( -name => "all_all_protocols",
+			-value => '1',
+			-label => 'Yes' ) );
 	
-    print $q->td( $q->scrolling_list( -name => "all_service",
-				      -values => [sort &getServiceList("")],
-				      -size => 5,
-				      -multiple => 'true' ) );
+    	print $q->td(	$q->scrolling_list( -name => "all_service",
+			-values => [sort &getServiceList("")],
+			-size => 5,
+			-multiple => 'true' ) );
 
-    print $q->td( $q->checkbox( -name => "all_all_services",
-				-value => '1',
-				-label => 'Yes' ) );
+   	print $q->td( 	$q->checkbox( -name => "all_all_services",
+			-value => '1',
+			-label => 'Yes' ) );
 
-    print $q->td( $q->scrolling_list( -name => "all_tos",
-				      -values => [sort &getTosList("")],
-			              -size => 5,
-				      -multiple => 'true' ) );
+	print $q->td( 	$q->scrolling_list( -name => "all_tos",
+			-values => [sort &getTosList("")],
+			-size => 5,
+			-multiple => 'true' ) );
 
-    print $q->td( $q->checkbox( -name => "all_all_tos",
-				-value => '1',
-				-label => 'Yes' ) );
+	print $q->td( 	$q->checkbox( -name => "all_all_tos",
+			-value => '1',
+			-label => 'Yes' ) );
 
-    print $q->td( $q->checkbox( -name => "all_total",
+	print $q->td( $q->checkbox( -name => "all_total",
 				    -value => '1',
 				    -label => 'Yes') );
 	
-    print $q->end_Tr;
+  	print $q->end_Tr;
+    }
 
     foreach my $type ( 'network', 'router', 'total_router', 'subnet', 'total_subnet' ) {
 
-      print $q->Tr( { -align => 'center' },
-		  $q->td( i("$type") ),
-		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
-		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
-		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
-		  $q->td( i('Total') ) );    
+      if (defined (param($type))) {
+		print	$q->Tr( { -align => 'center' },
+			$q->td( i("$type") ),
+			$q->td( i('Protocol') ), $q->td( i('All Protos') ),
+			$q->td( i('Service') ), $q->td( i('All Svcs') ),
+			$q->td( i('TOS') ), $q->td( i('All TOS') ),
+			$q->td( i('Total') ) );    
 
-      if ($type eq 'network') { @list = getNetworkList(); } 
-      if ($type eq 'router') { @list = getRouterList(); } 
-      if ($type eq 'total_router') { @list = ( 'total_router' ); } 
-      if ($type eq 'subnet') { @list = getSubnetList(); } 
-      if ($type eq 'total_subnet') { @list = ( 'total_subnet' ); } 
-      foreach my $r (  sort @list ) {
-
-	print $q->start_Tr;
-	print $q->td( { -align => 'center' }, $q->b($r),
+	if ($type eq 'network') { @list = param("network") } 
+	if ($type eq 'router') { @list = param("router") } 
+	if ($type eq 'total_router') { @list = ( 'total_router' ); } 
+	if ($type eq 'subnet') { @list = param("subnet") } 
+	if ($type eq 'total_subnet') { @list = ( 'total_subnet' ); } 
+	foreach my $r (  sort @list ) {
+		print $q->start_Tr;
+		print $q->td( { -align => 'center' }, $q->b($r),
 		      $q->hidden( -name => $type, -default => $r ) );
-        if ($type eq 'router' || $type eq 'subnet' || $type eq 'network') {
-		print $q->td( $q->scrolling_list( -name => "${r}_protocol",
-					  -values => [sort &getProtocolList($type."_".$r)],
-					  -size => 5,
-					  -multiple => 'true' ) );
-		print $q->td( $q->checkbox( -name => "${r}_all_protocols",
-					    -value => '1',
-					    -label => 'Yes' ) );
-		print $q->td( $q->scrolling_list( -name => "${r}_service",
-					  -values => [sort &getServiceList($type."_".$r)],
-					  -size => 5,
-					  -multiple => 'true' ) );
-		print $q->td( $q->checkbox( -name => "${r}_all_services",
-						-value => '1',
-				  		-label => 'Yes' ) );
-	} else {
-		print $q->td( $q->scrolling_list( -name => "${r}_protocol",
-					  -values => [ 'multicast' ],
-					  -size => 1,
-					  -multiple => 'true' ) );
-		print $q->td( $q->checkbox( -name => "${r}_all_protocols",
-					    -value => '1',
-					    -label => 'Yes' ) );
-	        print $q->td( '&nbsp;' );
-	        print $q->td( '&nbsp;' );
+		if ($type eq 'router' || $type eq 'subnet' || $type eq 'network') {
+			print $q->td( $q->scrolling_list(-name => "${r}_protocol",-values => [sort &getProtocolList($type."_".$r)],-size => 5,-multiple => 'true' ) );
+			print $q->td( $q->checkbox(-name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
+			print $q->td( $q->scrolling_list( -name => "${r}_service",-values => [sort &getServiceList($type."_".$r)],-size => 5,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_services",-value => '1',-label => 'Yes' ) );
+		} else {
+			print $q->td( $q->scrolling_list( -name => "${r}_protocol",-values => [ 'multicast' ],-size => 1,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
+			print $q->td( '&nbsp;' );
+			print $q->td( '&nbsp;' );
+		}
+	        if ($type eq 'total_router' || $type eq 'total_subnet') {
+			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type)],-size => 5,-multiple => 'true' ) );
+		} else {
+			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type."_".$r)],-size => 5,-multiple => 'true' ) );
+		}
+		print $q->td( $q->checkbox( -name => "${r}_all_tos",-value => '1',-label => 'Yes' ) );
+		print $q->td( $q->checkbox( -name => "${r}_total",-value => '1',-label => 'Yes') );
+		print $q->end_Tr;
 	}
-        if ($type eq 'total_router' || $type eq 'total_subnet') {
-		print $q->td( $q->scrolling_list( -name => "${r}_tos",
-						  -values => [sort &getTosList($type)],
-						  -size => 5,
-						  -multiple => 'true' ) );
-	} else {
-		print $q->td( $q->scrolling_list( -name => "${r}_tos",
-						  -values => [sort &getTosList($type."_".$r)],
-						  -size => 5,
-						  -multiple => 'true' ) );
-        }
-	print $q->td( $q->checkbox( -name => "${r}_all_tos",
-				    -value => '1',
-				    -label => 'Yes' ) );
-	print $q->td( $q->checkbox( -name => "${r}_total",
-				    -value => '1',
-				    -label => 'Yes') );
-	print $q->end_Tr;
-
       }
     }
 
     print $q->end_table();
-    
     print $q->br;
-
     print $q->center( $q->submit( -name => '',
 				  -value => 'Generate graph' ) );
-
     print $q->end_form;
-
     print $q->end_html;    
     exit;
 }
