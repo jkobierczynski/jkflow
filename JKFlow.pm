@@ -286,6 +286,10 @@ sub parseConfig {
 		}
 
 	}	
+
+	pushDirections2( \%{$config->{fromsubnets}}, $JKFlow::fromtrie );
+	pushDirections2( \%{$config->{tosubnets}}, $JKFlow::totrie );
+
 	
 	if (defined $config->{router}{total_router}) {
 		$JKFlow::mylist{'total_router'} = {};
@@ -435,47 +439,53 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
-			my @list = ();
-			if (defined $JKFlow::fromtrie->match_string($nofromsubnet)) {
-				my @list = @{$JKFlow::fromtrie->match_string($nofromsubnet)};
-			}
-			$JKFlow::fromtrie->add_string($nofromsubnet,\@list);
-		}
+		#foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
+		#	my @list = ();
+		#	if (defined $JKFlow::fromtrie->match_string($nofromsubnet)) {
+		#		my @list = @{$JKFlow::fromtrie->match_string($nofromsubnet)};
+		#	}
+		#	$JKFlow::fromtrie->add_string($nofromsubnet,\@list);
+		#}
 
-		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
-			my %seen = ();
-			my @list = ();
-			if (defined $JKFlow::fromtrie->match_string($fromsubnet)) {
-				my @tmplist = @{$JKFlow::fromtrie->match_string($fromsubnet)};
-				if (defined $tmplist[0]) {
-					push @list,  @tmplist;
-				}
-			}
-			@list = grep { ! $seen{$_} ++ } ( @list, $fromsubnet );
-			$JKFlow::fromtrie->add_string($fromsubnet,\@list);
-		}
+		#foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
+		#	my %seen = ();
+		#	my @list = ();
+		#	if (defined $JKFlow::fromtrie->match_string($fromsubnet)) {
+		#		my @tmplist = @{$JKFlow::fromtrie->match_string($fromsubnet)};
+		#		if (defined $tmplist[0]) {
+		#			push @list,  @tmplist;
+		#		}
+		#	}
+		#	@list = grep { ! $seen{$_} ++ } ( @list, $fromsubnet );
+		#	print "FROMSUBNET=$fromsubnet\n";
+		#	use Data::Dumper;
+		#	print Dumper(@list)."\n";
+		#	$JKFlow::fromtrie->add_string($fromsubnet,\@list);
+		#}
 
-		foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
-			my @list = ();
-                        if (defined $JKFlow::totrie->match_string($notosubnet)) {
-				my @list = @{$JKFlow::totrie->match_string($notosubnet)};
-			}
-			$JKFlow::totrie->add_string($notosubnet,\@list);
-		}
+		#foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
+		#	my @list = ();
+                #        if (defined $JKFlow::totrie->match_string($notosubnet)) {
+		#		my @list = @{$JKFlow::totrie->match_string($notosubnet)};
+		#	}
+		#	$JKFlow::totrie->add_string($notosubnet,\@list);
+		#}
 
-		foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
-			my %seen = ();
-			my @list = ();
-                     	if (defined $JKFlow::totrie->match_string($tosubnet)) {
-				my @tmplist = @{$JKFlow::totrie->match_string($tosubnet)};
-				if (defined $tmplist[0]) {
-					push @list,  @tmplist;
-				}
-			}
-			@list = grep { ! $seen{$_} ++ } ( @list, $tosubnet );
-			$JKFlow::totrie->add_string($tosubnet,\@list);
-		}
+		#foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
+		#	my %seen = ();
+		#	my @list = ();
+                #     	if (defined $JKFlow::totrie->match_string($tosubnet)) {
+		#		my @tmplist = @{$JKFlow::totrie->match_string($tosubnet)};
+		#		if (defined $tmplist[0]) {
+		#			push @list,  @tmplist;
+		#		}
+		#	}
+		#	@list = grep { ! $seen{$_} ++ } ( @list, $tosubnet );
+		#	print "TOSUBNET=$tosubnet\n";
+		#	use Data::Dumper;
+		#	print Dumper(@list)."\n";
+		#	$JKFlow::totrie->add_string($tosubnet,\@list);
+		#}
 		#END NEW CODE
 
 
@@ -518,6 +528,42 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		#print "refxml=".Dumper($refxml)."\n";
 		#print "ref=".Dumper($ref)."\n";
 	}
+}
+
+sub pushDirections2 {
+my $refxml=shift;
+my $ref=shift;
+my ($srv,$proto,$start,$end,$tmp,$i,$subnet);
+
+		foreach $subnet (@{$refxml->{'subnet'}}) {
+
+
+			if (defined $subnet->{'nosubnets'}) { 
+				foreach my $nosubnet (split /,/, $subnet->{'nosubnets'}) {
+					my @list = ();
+					if (defined $ref->match_string($nosubnet)) {
+						my @list = @{$ref->match_string($nosubnet)};
+					}
+					print "PUSH NOSUBNET:".$nosubnet."\n";
+					$ref->add_string($nosubnet,\@list);
+				}
+			}
+
+			foreach my $addsubnet (split /,/, $subnet->{'subnets'}) {
+				my %seen = ();
+				my @list = ();
+				if (defined $ref->match_string($addsubnet)) {
+					my @tmplist = @{$ref->match_string($addsubnet)};
+					if (defined $tmplist[0]) {
+						push @list,  @tmplist;
+					}
+				}
+				@list = grep { ! $seen{$_} ++ } ( @list, $addsubnet );
+				print "PUSH SUBNET:".$addsubnet."\n";
+				$ref->add_string($addsubnet,\@list);
+			}
+			pushDirections2($subnet,$ref);
+		}
 }
 
 sub new {
