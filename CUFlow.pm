@@ -254,9 +254,9 @@ my(%SERVICES);			# A hashtable containing services we are
 				# means that we are interested in www/tcp
 				# and that it has label 'www'
 my(%myservices);
-my(%mysubnetlist);
-my(%myrouterlist);
-my(%myalllist);
+#my(%mysubnetlist);
+#my(%myrouterlist);
+#my(%myalllist);
 my($which);
 my($subnet);
 my(%PROTOCOLS);			# A hashtable containing protocols we are
@@ -405,8 +405,6 @@ sub parseConfig {
 	    $txt   = $1;
 	    $label = $2;
 
-	    $hr = { };		# New hashref
-
 	    # A Service is one or more port/proto ranges, separated by ,'s
 	    foreach $current (split(/,/,$txt)) {
 		# Parse each item
@@ -430,6 +428,7 @@ sub parseConfig {
 
 			for($i=$start;$i<=$end;$i++) {
 			    $CUFlow::myalllist{'service'}{$proto}{$i} = {}; # Save all these ports
+                            $CUFlow::SERVICES{$proto}{$i} = $label; 
 			}
 		    } else {	# Symbolic or bad?
 			if ($srv !~ /\d+/) { # Not an integer? 
@@ -441,12 +440,12 @@ sub parseConfig {
 			    $srv = $tmp;
 			}
 			$CUFlow::myalllist{'service'}{$proto}{$srv} = {};
+                        $CUFlow::SERVICES{$proto}{$srv} = $label; 
 		    }
 		} else {
 		    die "Bad Service item $current on line $.\n";
 		}
 	    }
-	    $CUFlow::SERVICES{$label} = $hr;
 	} elsif (/^\s*TOS\s+(\S+)\s+(\S+)\s*$/) {
 	    $txt   = $1;
 	    $label = $2;
@@ -718,6 +717,7 @@ sub reporttorrdfiles {
              }
              else {
                   push(@values, $tmp);
+                  $reference->{'total'}{$j}{$i}=0;
              }
 	}
     }
@@ -743,6 +743,7 @@ sub reporttorrdfiles {
 	             }
         	     else {
                 	  push(@values, $tmp);
+                          $reference->{'tos'}{$tos}{$j}{$i}=0;
              	     }
                 }
             }
@@ -769,6 +770,7 @@ sub reporttorrdfiles {
              }
              else {
                   push(@values, $tmp);
+                  $reference->{'multicast'}{'total'}{$j}{$i}=0;
              }
         }
     }
@@ -787,9 +789,11 @@ sub reporttorrdfiles {
                       }
                       else {        
 		         push(@values, $tmp);
+                         $reference->{'protocol'}{$protocol}{'total'}{$j}{$i}=0;
                       }
                    }
           }
+          #print "File=$file Numbers=@values\n";
           $self->createGeneralRRD($file,
                               qw(
                               ABSOLUTE in_bytes
@@ -809,7 +813,7 @@ sub reporttorrdfiles {
                 if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
 		  $tmp = $srv;
                 }
-	        $file = $CUFlow::OUTDIR. $dir . "/service_" . $tmp . "_" . $src . ".rrd";
+	        $file = $CUFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
 	        @values = ();
 	        foreach my $i ('bytes','pkts','flows') {
 	           foreach my $j ('in','out') {
@@ -818,6 +822,7 @@ sub reporttorrdfiles {
                       }
                       else {        
 		         push(@values, $tmp);
+                         $reference->{'service'}{$protocol}{$srv}{$src}{$j}{$i}=0;
                       }
                    }
                 }
@@ -843,17 +848,22 @@ sub report {
     my($routerfile);
     my(@values) = ();
     my(@array);
+	my(%mysubnetlist);
+	my(%myrouterlist);
+	my(%myalllist);
     my($hr,$count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
 
     # Zeroth, this takes a lot of time. So let's fork and return
-    if (fork()) {		# We are the parent, wait
-	wait;			# This wait will finish quit, as our immediate
-				# child just forks and dies. It's kid does the
-				# work. Saves us fiddling with signals.
-	return;			# Then go back!!!
-    } else {			# We are the child, fork again
-	exit if (fork());
-    }
+    #if (fork()) {		# We are the parent, wait
+    #print "I AM PARENT\n";
+    #	wait;			# This wait will finish quit, as our immediate
+    #				# child just forks and dies. It's kid does the
+    #				# work. Saves us fiddling with signals.
+    #	return;			# Then go back!!!
+    #    } else {			# We are the child, fork again
+    #    print "I AM CHILD\n";
+    #	exit if (fork());
+    #}
 
     foreach my $router (keys %{$CUFlow::myrouterlist{'router'}}) {
         ($routerdir=$CUFlow::myrouterlist{$router}{'name'}) =~ s/\//_/g;
@@ -869,11 +879,11 @@ sub report {
 	}
     }
 
-    if (! -d $CUFlow::OUTDIR."/router_total" ) {
-    mkdir($CUFlow::OUTDIR."/router_total",0755);
+    if (! -d $CUFlow::OUTDIR."/total_router" ) {
+    mkdir($CUFlow::OUTDIR."/total_router",0755);
     }
-    if (! -d $CUFlow::OUTDIR."/subnet_total" ) {
-    mkdir($CUFlow::OUTDIR."/subnet_total",0755);
+    if (! -d $CUFlow::OUTDIR."/total_subnet" ) {
+    mkdir($CUFlow::OUTDIR."/total_subnet",0755);
     }
 
     foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
@@ -884,8 +894,8 @@ sub report {
     }
 	
     reporttorrdfiles($self,"",\%{$CUFlow::myalllist});
-    reporttorrdfiles($self,"/router_total",\%{$CUFlow::myrouterlist});
-    reporttorrdfiles($self,"/subnet_total",\%{$CUFlow::mysubnetlist});
+    reporttorrdfiles($self,"/total_router",\%{$CUFlow::myrouterlist});
+    reporttorrdfiles($self,"/total_subnet",\%{$CUFlow::mysubnetlist});
     foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
         print("Router:".$CUFlow::myrouterlist{$rt}{'name'}."\n");
     	reporttorrdfiles($self,"/router_".$CUFlow::myrouterlist{$rt}{'name'},\%{$CUFlow::myrouterlist{'router'}{$rt}});
