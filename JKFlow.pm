@@ -295,17 +295,20 @@ sub parseConfig {
 	foreach my $router (keys %{$config->{routers}{router}}) {
 		my $routerip = $config->{routers}{router}{$router}{ipaddress};
 		$JKFlow::mylist{'router'}{$routerip}{'name'} = $router;
-		foreach my $application (keys %{$config->{routers}{router}{$router}{application}{service}}) {
-			pushServices(
-				$config->{routers}{router}{$router}{application}{service}{$application}{content},
-				\%{$JKFlow::mylist{'router'}{$routerip}{'application'}{$application}});
-		}
+		#foreach my $application (keys %{$config->{routers}{router}{$router}{application}{service}}) {
+		#	pushServices(
+		#		$config->{routers}{router}{$router}{application}{service}{$application}{content},
+		#		\%{$JKFlow::mylist{'router'}{$routerip}{'application'}{$application}});
+		#}
 		pushServices(
 			$config->{routers}{router}{$router}{services},
 			\%{$JKFlow::mylist{'router'}{$routerip}{'service'}});
 		pushProtocols(
 			$config->{routers}{router}{$router}{protocols},
 			\%{$JKFlow::mylist{'router'}{$routerip}{'protocol'}});
+		pushApplications(
+			$config->{routers}{router}{$router}{direction},
+			\%{$JKFlow::mylist{'router'}{$routerip}{direction}});
 		if (defined $config->{routers}{router}{$router}{tos}) {
 			$JKFlow::mylist{'router'}{$routerip}{tos}={};
 		}
@@ -319,17 +322,20 @@ sub parseConfig {
 	}		
 	foreach my $subnet (keys %{$config->{subnets}{subnet}}) {
 		$JKFlow::SUBNETS->add_string($subnet);
-		foreach my $application (keys %{$config->{subnets}{subnet}{$subnet}{application}{service}}) {
-			pushServices(
-				$config->{subnets}{subnet}{$subnet}{application}{service}{$application}{content},
-				\%{$JKFlow::mylist{'subnet'}{$subnet}{'application'}{$application}});
-		}
+		#foreach my $application (keys %{$config->{subnets}{subnet}{$subnet}{application}{service}}) {
+		#	pushServices(
+		#		$config->{subnets}{subnet}{$subnet}{application}{service}{$application}{content},
+		#		\%{$JKFlow::mylist{'subnet'}{$subnet}{'application'}{$application}});
+		#}
 		pushServices(
 			$config->{subnets}{subnet}{$subnet}{services},
 			\%{$JKFlow::mylist{'subnet'}{$subnet}{'service'}});
 		pushProtocols(
 			$config->{subnets}{subnet}{$subnet}{protocols},
 			\%{$JKFlow::mylist{'subnet'}{$subnet}{'protocol'}});
+		pushApplications(
+			$config->{subnets}{subnet}{$subnet}{direction},
+			\%{$JKFlow::mylist{'subnet'}{$subnet}{direction}});
 		if (defined $config->{subnets}{subnet}{$subnet}{tos}) {
 			$JKFlow::mylist{'subnet'}{$subnet}{tos}={};
 		}
@@ -339,19 +345,25 @@ sub parseConfig {
 	}
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
-		foreach my $application (keys %{$config->{networks}{network}{$network}{application}{service}}) {
-			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'fromsubnet'}=
-				new Net::Patricia || die "Could not create a trie ($!)\n";
-			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'fromsubnet'}->add_string(
-				$config->{networks}{network}{$network}{application}{fromsubnet});
-			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'tosubnet'}=
-				new Net::Patricia || die "Could not create a trie ($!)\n";
-			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'tosubnet'}->add_string(
-				$config->{networks}{network}{$network}{application}{tosubnet});
-			pushServices(
-				$config->{networks}{network}{$network}{application}{service}{$application}{content},
-				\%{$JKFlow::mylist{'network'}{$network}{'application'}{$application}});
-		}
+		pushApplications(
+			$config->{networks}{network}{$network}{direction},
+			\%{$JKFlow::mylist{'network'}{$network}{direction}});
+#		foreach my $application (keys %{$config->{networks}{network}{$network}{application}{service}}) {
+#			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'fromsubnet'}=
+#				new Net::Patricia || die "Could not create a trie ($!)\n";
+#			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'fromsubnet'}->add_string(
+#				$config->{networks}{network}{$network}{application}{fromsubnet});
+#			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'tosubnet'}=
+#				new Net::Patricia || die "Could not create a trie ($!)\n";
+#			$JKFlow::mylist{'network'}{$network}{'application'}{$application}{'tosubnet'}->add_string(
+#				$config->{networks}{network}{$network}{application}{tosubnet});
+#			pushServices(
+#				$config->{networks}{network}{$network}{application}{service}{$application}{content},
+#				\%{$JKFlow::mylist{'network'}{$network}{'application'}{'service'}{$application}});
+#			pushApplications(
+#				$config->{networks}{network}{$network}{application},
+#				\%{$JKFlow::mylist{'network'}{$network}{'application'}});
+#		}
 		if (defined $config->{networks}{network}{$network}{routers}) {
 			foreach my $router (split(/,/,$config->{networks}{network}{$network}{routers})) {
 				$JKFlow::mylist{'network'}{$network}{'router'}{$router}={};
@@ -630,9 +642,9 @@ my $tmp;
 sub pushServices {
 my $refxml=shift;
 my $ref=shift;
-my ($current,$srv,$proto,$start,$end,$tmp,$i);
+my ($srv,$proto,$start,$end,$tmp,$i);
 
-	foreach $current (split(/,/,$refxml)) {
+	foreach my $current (split(/,/,$refxml)) {
 		if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
 			$srv = $1;
 			$proto = $2;
@@ -658,6 +670,57 @@ my ($current,$srv,$proto,$start,$end,$tmp,$i);
 			}
 		} else {
 			die "Bad Service Item $current on line $.\n";
+		}	
+	}
+}
+
+sub pushApplications {
+my $refxml=shift;
+my $ref=shift;
+my ($srv,$proto,$start,$end,$tmp,$i);
+
+	use Data::Dumper;
+	print "refxml=".Dumper($refxml)."\n";
+	print "ref=".Dumper($ref)."\n";
+	if (! defined $refxml->{'name'}) {
+		$refxml->{'name'}="default";
+	}
+	if (defined $refxml->{'fromsubnet'}) {
+		$ref->{$refxml->{'name'}}{'fromsubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		$ref->{$refxml->{'name'}}{'fromsubnet'}->add_string($refxml->{'fromsubnet'});
+	}
+	if (defined $refxml->{'tosubnet'}) { 
+		$ref->{$refxml->{'name'}}{'tosubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
+		$ref->{$refxml->{'name'}}{'tosubnet'}->add_string($refxml->{'tosubnet'});
+	}
+	foreach my $application (keys %{$refxml->{'application'}}) {
+		foreach my $current (split(/,/,$refxml->{'application'}{$application}{'content'})) {
+			if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
+				$srv = $1;
+				$proto = $2;
+				if ($proto !~ /\d+/) { 
+					$tmp = getprotobyname($proto) ||
+						die "Unknown protocol $proto on line $.\n";
+					$proto = $tmp;
+				}
+				if ($srv =~ /(\d+)-?(\d+)?/) {
+					$start = $1;
+					$end = (defined($2)) ? $2: $start;
+					die "Bad range $start - $end on line $.\n" if
+						($end < $start);
+					for($i=$start;$i<=$end;$i++) {
+						$ref->{$refxml->{'name'}}{'application'}{$application}{$proto}{$i} = {};
+					}
+				} else {
+					if ($srv !~ /\d+/) {
+						$tmp = getservbyname($srv, getprotobynumber($proto)) || die "Unknown service $srv on line $.\n";
+						$srv = $tmp;
+					}
+					$ref->{$refxml->{'name'}}{'application'}{$application}{$proto}{$srv} = {};
+				}
+			} else {
+				die "Bad Service Item $current on line $.\n";
+			}
 		}	
 	}
 }
