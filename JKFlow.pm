@@ -108,6 +108,7 @@ my($subnet);
 my($config);
 
 my($flowrate) = 1;
+my($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst);
 
 $JKFlow::directionroutersgroupsonly = 0;	# Are there directions with only routergroup attributes?
 $JKFlow::multicast = 0;				# Do multicast? Default no.
@@ -127,7 +128,7 @@ sub parseConfig {
 	use XML::Simple;
 	$config=XMLin('/usr/local/bin/JKFlow.xml',
 		forcearray=>[	'router','routergroup','interface','subnet','site','network',
-				'direction','application','defineset','set']);
+				'direction','application','defineset','set','report']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
@@ -257,67 +258,77 @@ my $ref=shift;
 	}
 	if (defined $refxml->{scoreboard}) {
 		if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
-			$ref->{scoreboard}{hosts}={};
+			$ref->{scoreboard}{hosts}{all}={};
 		}
 		if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
-			$ref->{scoreboard}{ports}={};
+			$ref->{scoreboard}{ports}{all}={};
 		}
 		if (defined $refxml->{scoreboard}{latesthosts}) {
+			$ref->{scoreboard}{hosts}{all}={};
 			$ref->{scoreboard}{latest}{hosts}=$refxml->{scoreboard}{latesthosts};
 			print "Scorepage hosts is $ref->{scoreboard}{latest}{hosts}\n";
+		}
+		if (defined $refxml->{scoreboard}{latestports}) {
+			$ref->{scoreboard}{ports}{all}={};
 			$ref->{scoreboard}{latest}{ports}=$refxml->{scoreboard}{latestports};
 			print "Scorepage ports is $ref->{scoreboard}{latest}{ports}\n";
+		}
+		if (defined $refxml->{scoreboard}{report}) {
+			foreach my $report (@{$refxml->{scoreboard}{report}}) {
+				if (defined $report->{hostsbase}) {
+					if (!defined $ref->{scoreboard}{hosts}) { $ref->{scoreboard}{hosts}={}; }
+					push @{$ref->{scoreboard}{aggregate}{hosts}{report}},
+					{	'count' => $report->{count},
+						'filenamebase' => $report->{hostsbase},
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+				}
+				if (defined $report->{portsbase}) {
+					if (!defined $ref->{scoreboard}{ports}) { $ref->{scoreboard}{ports}={}; }
+					push @{$ref->{scoreboard}{aggregate}{ports}{report}},
+					{	'count' => $report->{count},
+						'filenamebase' => $report->{portsbase},
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+				}
+			}
 		}
 	}
 	if (defined $refxml->{scoreboardother}) {
 		if (defined $refxml->{scoreboardother}{hosts} && $refxml->{scoreboardother}{hosts} =="1" && !defined $ref->{scoreboardother}{hosts}) {
-			$ref->{scoreboardother}{hosts}={};
+			$ref->{scoreboardother}{hosts}{all}={};
 		}
 		if (defined $refxml->{scoreboardother}{ports} && $refxml->{scoreboardother}{ports}=="1" && !defined $ref->{scoreboardother}{ports}) {
-			$ref->{scoreboardother}{ports}={};
+			$ref->{scoreboardother}{ports}{all}={};
 		}
-		if (defined $refxml->{scoreboardother}{latesthosts}) {
+		if (defined $refxml->{scoreboardother}{hosts} && defined $refxml->{scoreboardother}{latesthosts}) {
+			$ref->{scoreboardother}{hosts}{all}={};
 			$ref->{scoreboardother}{latest}{hosts}=$refxml->{scoreboardother}{latesthosts};
 			print "Scorepage hosts is $ref->{scoreboardother}{latest}{hosts}\n";
+		}
+		if (defined $refxml->{scoreboardother}{ports} && defined $refxml->{scoreboardother}{latestports}) {
+			$ref->{scoreboardother}{ports}{all}={};
 			$ref->{scoreboardother}{latest}{ports}=$refxml->{scoreboardother}{latestports};
 			print "Scorepage ports is $ref->{scoreboardother}{latest}{ports}\n";
 		}
-	}
-	if (defined $refxml->{aggscoreboard}) {
-		if (defined $refxml->{aggscoreboard}{hosts}) {
-			$ref->{scoreboard}{aggscoreboard}{hosts}{file}=$refxml->{aggscoreboard}{hosts};
-			print "Aggscoreboard hosts is $ref->{scoreboard}{aggscoreboard}{hosts}{file}\n";
-			if (defined $refxml->{aggscoreboard}{scorekeep}) {
-				$ref->{scoreboard}{aggscoreboard}{hosts}{scorekeep}=$refxml->{aggscoreboard}{scorekeep};
-				print "Aggscoreboard hosts score to keep is $ref->{scoreboard}{aggscoreboard}{hosts}{scorekeep}\n";
-			} else {
-				$ref->{scoreboard}{aggscoreboard}{hosts}{scorekeep}=10;
-				print "Aggscoreboard hosts score to keep is 10\n";
-			}
-			if (defined $refxml->{aggscoreboard}{numkeep}) {
-				$ref->{scoreboard}{aggscoreboard}{hosts}{numkeep}=$refxml->{aggscoreboard}{numkeep};
-				print "Aggscoreboard hosts numbers to keep is $ref->{scoreboard}{aggscoreboard}{hosts}{numkeep}\n";
-			} else {
-				$ref->{scoreboard}{aggscoreboard}{hosts}{scorekeep}=50;
-				print "Aggscoreboard hosts numbers to keep is 50\n";
-			}
-		}
-		if (defined $refxml->{aggscoreboard}{ports}) {
-			$ref->{scoreboard}{aggscoreboard}{ports}{file}=$refxml->{aggscoreboard}{ports};
-			print "Aggscoreboard ports is $ref->{scoreboard}{aggscoreboard}{ports}{file}\n";
-			if (defined $refxml->{aggscoreboard}{scorekeep}) {
-				$ref->{scoreboard}{aggscoreboard}{ports}{scorekeep}=$refxml->{aggscoreboard}{scorekeep};
-				print "Aggscoreboard ports score to keep is $ref->{scoreboard}{aggscoreboard}{ports}{scorekeep}\n";
-			} else {
-				$ref->{scoreboard}{aggscoreboard}{ports}{scorekeep}=10;
-				print "Aggscoreboard ports score to keep is 10\n";
-			}
-			if (defined $refxml->{aggscoreboard}{numkeep}) {
-				$ref->{scoreboard}{aggscoreboard}{ports}{numkeep}=$refxml->{aggscoreboard}{numkeep};
-				print "Aggscoreboard ports numbers to keep is $ref->{scoreboard}{aggscoreboard}{ports}{numkeep}\n";
-			} else {
-				$ref->{scoreboard}{aggscoreboard}{ports}{scorekeep}=50;
-				print "Aggscoreboard ports numbers to keep is 50\n";
+		if (defined $refxml->{scoreboardother}{report}) {
+			foreach my $report (@{$refxml->{scoreboardother}{report}}) {
+				if (defined $report->{hostsbase}) {
+					if (!defined $ref->{scoreboardother}{hosts}) { $ref->{scoreboardother}{hosts}={}; }
+					push @{$ref->{scoreboardother}{aggregate}{hosts}{report}},
+					{	'count' => $report->{count},
+						'filenamebase' => $report->{hostsbase},
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+				}
+				if (defined $report->{portsbase}) {
+					if (!defined $ref->{scoreboardother}{ports}) { $ref->{scoreboardother}{ports}={}; }
+					push @{$ref->{scoreboardother}{aggregate}{ports}{report}},
+					{	'count' => $report->{count},
+						'filenamebase' => $report->{portsbase},
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+				}
 			}
 		}
 	}
@@ -412,7 +423,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			} else {
 				die "Bad Service Item $current on line $.\n";
 			}
-		}	
+		}
 	}
 }
 
@@ -1199,10 +1210,10 @@ sub reporttorrdfiles {
 	}
 
 	if (defined $ref->{'scoreboard'}) {
-		scoreboard($self, $dir . "/" . $direction, \%{$ref->{'scoreboard'}}, $samplerate );
+		scoreboard($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
 	}
 	if (defined $ref->{'scoreboardother'}) {
-		scoreboard($self, $dir . "/" . $direction . "/other" , \%{$ref->{'scoreboardother'}}, $samplerate );
+		scoreboard($self, $dir . "/other" , \%{$ref->{'scoreboardother'}}, $samplerate );
 	}
 	
 	if (defined $ref->{'direction'}) {
@@ -1212,7 +1223,7 @@ sub reporttorrdfiles {
 			}
 			if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
 				mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
-			}	
+			}
 			reporttorrdfiles($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}},$ref->{'direction'}{$direction}{'samplerate'});
 		}
 	}
@@ -1220,12 +1231,6 @@ sub reporttorrdfiles {
 
 sub report {
 	my $self = shift;
-	my($file) = $JKFlow::RRDDIR . "/total.rrd";
-	my($routerfile);
-	my(@values) = ();
-	my(@array);
-	my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
-	my $interf_name;
 
 	if (defined $JKFlow::mylist{'all'}) {
 		if (! -d $JKFlow::RRDDIR."/all" ) {
@@ -1237,20 +1242,20 @@ sub report {
 		if (! -d $JKFlow::SCOREDIR."/all/other" ) {
 			mkdir($JKFlow::SCOREDIR."/all/other",0755);
 		}
-		reporttorrdfiles($self, $dir."/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
+		reporttorrdfiles($self, "/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
 
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
-		if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
-			mkdir($JKFlow::RRDDIR . $dir . "/" . $direction ,0755);
+		if (! -d $JKFlow::RRDDIR."/".$direction ) {
+			mkdir($JKFlow::RRDDIR."/".$direction ,0755);
 		}
-		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
-			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
+		if (! -d $JKFlow::SCOREDIR."/".$direction ) {
+			mkdir($JKFlow::SCOREDIR."/".$direction ,0755);
 		}
-		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction . "/other" ) {
-			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction . "/other" ,0755);
+		if (! -d $JKFlow::SCOREDIR."/".$direction . "/other" ) {
+			mkdir($JKFlow::SCOREDIR."/".$direction . "/other" ,0755);
 		}
-		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
+		reporttorrdfiles($self, "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
 	}   
 }
 
@@ -1267,90 +1272,273 @@ sub updateRRD {
    warn "ERROR updating". $JKFlow::RRDDIR."/".$dir."/"."$file: $err\n" if ($err);
 }
 
-# Function to read in the current aggregate data
-# Returns a hash of ip to (count of times in top ten, ttl bytes in,
-#			   ttl pkts in, ttl flows in, ttl bytes out,
-#			   ttl pkts out, ttl flows out
-sub readAggFile
-{
-    my $file=shift;
-    my($ip,$cnt,$bin,$pin,$fin,$bout,$pout,$fout);
-    my(%ret) = ();
 
-    if (-f $file) {	# Exists, try reading it in
-	open(AGG,$file) ||
-	    die "Cannot open $file ($!)\n";
-	$ret{'numresults'} = <AGG>;
-	chomp($ret{'numresults'});
-	while(<AGG>) {
-	    if (
-		($ip,$cnt,$bin,$pin,$fin,$bout,$pout,$fout) =
-	(/(\d+\.\d+\.\d+\.\d+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)/))
-	    {
-		# Skip any data that has rolled over
-		if (($cnt < 0) || ($bin < 0) || ($bout < 0) ||
-		    ($pin < 0) || ($pout < 0) || ($fin < 0) ||
-		    ($fout < 0)) {
-		    print STDERR "Rollover for $ip\n";
-		    next;	# Skip it
+# Handle writing our HTML scoreboard reports
+sub scoreboard {    
+	my $self = shift;
+	my $dir = shift;
+	my $ref = shift;
+	my $samplerate = shift;
+
+	my($i,$file,$item,$hr);
+	my (@values, @sorted);
+	my(%dnscache) = ();
+	my(%newaggdata) = ();
+	my($table,$row);
+
+	
+	# Next, open the file, making any necessary directories
+	($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+		localtime($self->{filetime});  
+
+	$mon++; $year += 1900;
+
+	foreach my $type ('hosts','ports') { 
+
+		next if (!defined $ref->{aggregate}{$type}{report} && !defined $ref->{$type});
+		
+		if (defined $ref->{$type}{all}) {
+
+			$file=$JKFlow::SCOREDIR.$dir."/".$type;
+			
+			if (! -d $file) {
+				mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+			}
+
+			$file=sprintf("%s%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR,$dir,$type,$year,$mon,$mday);
+
+			if (! -d $file) {
+				mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+			}
+
+			#$file = sprintf("%s/%2.2d",$file,$hour);
+			#if (! -d $file) {
+			#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+			#}
+
+			$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
+			open(HTML,">$file") || die "Could not write to $file ($!)\n";
+
+			# Now, print out our header stuff into the file
+			print HTML "<html>\n<body bgcolor=\"\#ffffff\">\n<center>\n\n";
+
+		}
+		
+		# Now, print out our 6 topN tables
+		my %columns = ('bytes' => 3, 'pkts' => 5, 'flows' => 7);
+
+		foreach my $srcdst ('src','dst') {
+			@values = ();
+
+			foreach my $key ('bytes','pkts','flows') {
+
+				foreach my $direction ('in', 'out') {
+
+					@sorted = sort {$ref->{$type}{$srcdst}{$key}{$b}{$direction} <=> $ref->{$type}{$srcdst}{$key}{$a}{$direction}} (keys %{$ref->{$type}{$srcdst}{$key}});
+	    
+					$table = new HTML::Table;
+					
+					if (defined $ref->{$type}{all}) {
+					
+						# This part lifted totally from CampusIO.pm. Thanks, dave!
+						
+						die unless ref($table);
+						$table->setBorder(1);
+						$table->setCellSpacing(0);
+						$table->setCellPadding(3);
+	
+						$table->setCaption("Top $JKFlow::scorekeep by " .
+							"<b>$key $srcdst $direction</b><br>\n" .
+							"for flow sample ending " .
+							scalar(localtime($self->{filetime})),
+							'TOP');
+
+						$row = 1;
+						$table->addRow('<b>rank</b>',
+							"<b>$srcdst Address</b>",
+							'<b>bits/sec in</b>',
+							'<b>bits/sec out</b>',
+							'<b>pkts/sec in</b>',
+							'<b>pkts/sec out</b>',
+							'<b>flows/sec in</b>',
+							'<b>flows/sec out</b>');
+
+						$table->setRowBGColor($row, '#FFFFCC'); # pale yellow
+
+						# Highlight the current column (out is 1 off from in)
+						$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction),'#90ee90'); # light green
+						$row++;
+						
+					}
+
+					# Get the in and out hr's for ease of use
+					my ($in, $out);
+	
+					for($i=0;$i < @sorted; $i++) {
+						last unless $i < $JKFlow::SCOREKEEP;
+						$item = $sorted[$i];
+	
+						if (!(defined($newaggdata{$type}{$item}))) { # Add this to aggdata 1x
+							$newaggdata{$type}{$item} = {
+								'bytesin'  => $ref->{$type}{$srcdst}{bytes}{$item}{in} * $samplerate,
+								'bytesout' => $ref->{$type}{$srcdst}{bytes}{$item}{out} * $samplerate,
+								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in} * $samplerate,
+								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out} * $samplerate,
+								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in} * $samplerate,
+								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $samplerate
+							};
+						}
+
+						#if (!(defined($dnscache{$ip}))) { # No name here?
+						#if ($dnscache{$ip} = gethostbyaddr(pack("C4",split(/\./, $ip)),AF_INET)) {
+						#	if (1==0) {
+						#		$dnscache{$ip} .= "<br>$ip";
+						#	} else {
+						#		$dnscache{$ip} = $ip;
+						#	}
+						#}
+
+						if (defined $ref->{$type}{all}) {
+						
+							$table->addRow( sprintf("#%d",$i+1),
+							#$dnscache{$ip},      # IP Name/Address
+							$item,						
+
+							# Bits/sec in
+							scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{in}*8)/$JKFlow::SAMPLETIME),
+
+							# Bits/sec out
+							scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{out}*8)/$JKFlow::SAMPLETIME),
+					
+							# Pkts/sec in
+							scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{in}/$JKFlow::SAMPLETIME)),
+
+							# Pkts/sec out
+							scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{out}/$JKFlow::SAMPLETIME)),
+
+							# Flows/sec in
+							scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{in}/$JKFlow::SAMPLETIME)),
+
+							# Flows/sec out
+							scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{out}/$JKFlow::SAMPLETIME)) );
+
+							$table->setRowAlign($row, 'RIGHT');
+							$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction), '#add8e6'); # light blue
+							$row++;
+						}
+					}
+				if (defined $ref->{$type}{all}) { print HTML "<p>\n$table</p>\n\n"; }
+				}
+			}
+		}
+		
+		if (defined $ref->{$type}{all}) {
+		
+			# Print footers
+			print HTML "\n</center>\n</body>\n</html>\n";
+
+			# Close the file, and make $scorepage point at this page
+			close HTML;
+
 		}
 
-		$ret{$ip} = { 'count'    => $cnt,
-			      'bytesin'  => $bin,
-			      'bytesout' => $bout,
-			      'pktsin'   => $pin, 
-			      'pktsout'  => $pout,
-			      'flowsin'  => $fin,
-			      'flowsout' => $fout };
-	    }
+		# Update links
+		if (defined $ref->{latest}{$type}) {
+			if ($ref->{latest}{$type} !~ /^\/.*/) {
+				unlink $JKFlow::SCOREDIR.$dir."/".$ref->{latest}{$type} ||
+					warn "Could not remove ".$JKFlow::SCOREDIR.$dir.$ref->{latest}{$type}." ($!)\n";
+				symlink $file, $JKFlow::SCOREDIR.$dir."/".$ref->{latest}{$type} ||
+					warn "Could not create symlink to $JKFlow::SCOREDIR.$dir.$ref->{latest}{$type} ($!)\n";
+			} else {
+				unlink $ref->{latest}{$type} ||
+					warn "Could not remove ".$ref->{latest}{$type}." ($!)\n";
+				symlink $file, $ref->{latest}{$type} ||
+					warn "Could not create symlink to ".$ref->{latest}{$type}." ($!)\n";
+			}
+		}
+	
+		##### AGGDATA ######
+		&countAggdata($dir,$ref->{aggregate}{$type}{report},\%{$newaggdata{$type}},$self->{filetime});
 	}
-	close AGG;
-    }
-    return %ret;
+	
+	if (defined $ref->{hosts}) {
+		delete $ref->{hosts}{src};
+		delete $ref->{hosts}{dst};
+	}
+	if (defined $ref->{ports}) {
+		delete $ref->{ports}{src};
+		delete $ref->{ports}{dst};
+	}
+	return;
 }
 
-# Function to write the aggregate data out to a file
-sub writeAggFile {
-    my $data = shift;
-    my $file = shift;
-    
-    open(OUT,">$file") ||
-	die "Cannot open $file for write ($!)\n";
+sub countAggdata($) {
 
-	use Data::Dumper;
-	print Dumper($data);
-	
-    print OUT $data->{'numresults'} . "\n";
-    foreach my $ip (keys %data) {
-	next if ($ip =~ /numresults/);
-	print "writing %s %d %d %d %d %d %d %d\n",
-			$ip,
-			$data->{$ip}{'count'},
-			$data->{$ip}{'bytesin'},
-			$data->{$ip}{'pktsin'},
-			$data->{$ip}{'flowsin'},
-			$data->{$ip}{'bytesout'},
-			$data->{$ip}{'pktsout'},
-			$data->{$ip}{'flowsout'};
-	printf OUT "%s %d %d %d %d %d %d %d\n",
-			$ip,
-			$data->{$ip}{'count'},
-			$data->{$ip}{'bytesin'},
-			$data->{$ip}{'pktsin'},
-			$data->{$ip}{'flowsin'},
-			$data->{$ip}{'bytesout'},
-			$data->{$ip}{'pktsout'},
-			$data->{$ip}{'flowsout'};
-    }
+	my $dir=shift;
+	my $ref=shift;
+	my $newaggdata=shift;
+	my $filetime=shift;
 
-    close OUT;
+	foreach my $report (@{$ref}) {
+		if ($filetime > $report->{startperiod} + $report->{count} * $JKFlow::SAMPLETIME ) {
+			# Write the aggregate table
+			# Next, open the file, making any necessary directories
+			if (($report->{startperiod} == 0) || !(defined $report->{startperiod})) {
+				$report->{startperiod}=$filetime;
+			} else {
+				my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($report->{startperiod});  
+				$file=sprintf("%s-%4.4d-%2.2d-%2.2d-%2.2d:%2.2d:%2.2d.html",$report->{filenamebase},$year+1900,$mon+1,$mday,$hour,$min,$sec);
+				#print "Wrote Agg Score:". $JKFlow::SCOREDIR.$dir.$file ."\n";
+				if ($file !~ /^\/.*/) {
+					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $JKFlow::SCOREDIR.$dir."/".$file);
+				} else {
+					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $file);
+				}
+				$report->{counter}=0;
+				$report->{startperiod} = $filetime - ($filetime % ($report->{count} * $JKFlow::SAMPLETIME));
+				delete $report->{aggdata};
+			}
+		}
+		# Merge newaggdata and aggdata
+		foreach my $porthost (keys %{$newaggdata}) {
+			$report->{aggdata}{$porthost}{'count'}++;
+			$report->{aggdata}{$porthost}{'bytesin'}  += $newaggdata->{$porthost}{'bytesin'};
+			$report->{aggdata}{$porthost}{'bytesout'} += $newaggdata->{$porthost}{'bytesout'};
+			$report->{aggdata}{$porthost}{'pktsin'}   += $newaggdata->{$porthost}{'pktsin'};
+			$report->{aggdata}{$porthost}{'pktsout'}  += $newaggdata->{$porthost}{'pktsout'};
+			$report->{aggdata}{$porthost}{'flowsin'}  += $newaggdata->{$porthost}{'flowsin'};
+			$report->{aggdata}{$porthost}{'flowsout'} += $newaggdata->{$porthost}{'flowsout'};
+		}
+		# Increment counter
+		$report->{aggdata}{'numresults'}++;
+		if ($report->{aggdata}{'numresults'} > $report->{numkeep}) {
+			# Prune this shit
+			$report->{aggdata}{'numresults'} >>= 1;
+			foreach $porthost (keys %{$report->{aggdata}}) {
+				next if ($porthost =~ /numresults/);           # Skip this, not a ref
+				if ($report->{aggdata}{$porthost}{'count'} == 1) {     # Delete singletons
+					delete $report->{aggdata}{$porthost};
+				} else {
+					$report->{aggdata}{$porthost}{'count'}    >>= 1;   # Divide by 2
+					$report->{aggdata}{$porthost}{'bytesin'}  >>= 1;
+					$report->{aggdata}{$porthost}{'bytesout'} >>= 1;
+					$report->{aggdata}{$porthost}{'pktsin'}   >>= 1;
+					$report->{aggdata}{$porthost}{'pktsout'}  >>= 1;
+					$report->{aggdata}{$porthost}{'flowsin'}  >>= 1;
+					$report->{aggdata}{$porthost}{'flowsout'} >>= 1;
+				}
+			}
+		}
+		$report->{counter} ++;
+	}
 }
 
 # Function to print the pretty table of over-all winners
 sub writeAggScoreboard ()
 {
     my %data = %{(shift)};
-    my $ref = shift;
+    my $scorekeep = shift;
+    my $count = shift;
     my $file = shift;
     my($key, $i);
     my(@sorted);
@@ -1363,11 +1551,11 @@ sub writeAggScoreboard ()
 	die "Cannot open $file for write ($!)\n";
 
     print OUT "<html>\n<body bgcolor=\"\#ffffff\">\n\n<center>\n";
-    print OUT "<h3> Average rankings for the last $tmp topN reports\n<hr>\n";
+    print OUT "<h3> Average rankings for the last ".$count." topN reports\n<hr>\n";
     print OUT "</center>\n";
 
     # Now, print out our 6 topN tables
-    my %columns = ('bytes' => 3, 'pkts' => 5, 'flows' => 7);
+    my %columns = ('bytes' => 4, 'pkts' => 6, 'flows' => 8);
 
     foreach my $dir ('in','out') {
 	foreach my $key ('bytes','pkts','flows') {
@@ -1384,8 +1572,8 @@ sub writeAggScoreboard ()
 	    $table->setBorder(1);
 	    $table->setCellSpacing(0);
 	    $table->setCellPadding(3);
-
-	    $table->setCaption("Top $ref->{scoreboard}{ports}{aggscoreboard}{tokeep} by " .
+	    
+	    $table->setCaption("Top ".$scorekeep." by " .
 			       "<b>$key $dir</b><br>\n" .
 			       "built on aggregated topN " .
 			       "5 minute average samples to date",
@@ -1407,7 +1595,7 @@ sub writeAggScoreboard ()
 				   '#90ee90'); # light green
 	    $row++;	    
 	    for($i=0;$i < @sorted; $i++) {
-		last unless $i < $JKFlow::AGGSCOREKEEP;
+		last unless $i < $scorekeep;
 		my $ip = $sorted[$i];
 
 #		if (!(defined($dnscache{$ip}))) { # No name here?
@@ -1424,8 +1612,8 @@ sub writeAggScoreboard ()
 
 		my $div = $JKFlow::SAMPLETIME * $data{$ip}->{'count'};
 		$table->addRow( sprintf("#%d",$i+1),
-#				$dnscache{$ip},      # IP Name/Address
-				$ip,
+				# $dnscache{$ip},      
+				$ip,			# Host / Port address
 				
 				# Bits/sec in
 				scale("%.1f", ($data{$ip}->{'bytesin'}*8) /
@@ -1461,250 +1649,6 @@ sub writeAggScoreboard ()
     
     close OUT;
     $data{'numresults'} = $tmp;
-}
-
-# Handle writing our HTML scoreboard reports
-sub scoreboard {    
-	my $self = shift;
-	my $dir = shift;
-	my $ref = shift;
-	my $samplerate = shift;
-
-	my($i,$file,$item,$hr);
-	my (@values, @sorted);
-	my(%dnscache) = ();
-	my(%newaggdata) = ();
-
-	
-	# Next, open the file, making any necessary directories
-	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-		localtime($self->{filetime});  
-
-	$mon++; $year += 1900;
-
-	foreach my $type ('hosts','ports') { 
-
-		next if (! defined $ref->{$type});
-
-		$file=sprintf("%s/%s/%s",$JKFlow::SCOREDIR,$dir,$type);
-
- 		if (! -d $file) {
-			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		}
-
-		$file=sprintf("%s/%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR,$dir,$type,$year,$mon,$mday);
-
- 		if (! -d $file) {
-			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		}
-
- 		#$file = sprintf("%s/%2.2d",$file,$hour);
-		#if (! -d $file) {
-		#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		#}
-    
-		$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
-		open(HTML,">$file") || die "Could not write to $file ($!)\n";
-
-		# Now, print out our header stuff into the file
- 		print HTML "<html>\n<body bgcolor=\"\#ffffff\">\n<center>\n\n";
-
-		# Now, print out our 6 topN tables
-		my %columns = ('bytes' => 3, 'pkts' => 5, 'flows' => 7);
-
-		foreach my $srcdst ('src','dst') {
-			@values = ();
-
-			foreach my $key ('bytes','pkts','flows') {
-
-				foreach my $direction ('in', 'out') {
-
-					@sorted = sort {$ref->{$type}{$srcdst}{$key}{$b}{$direction} <=> $ref->{$type}{$srcdst}{$key}{$a}{$direction}} (keys %{$ref->{$type}{$srcdst}{$key}});
-	    
-					# This part lifted totally from CampusIO.pm. Thanks, dave!
-					my $table = new HTML::Table;
-					die unless ref($table);
-					$table->setBorder(1);
-					$table->setCellSpacing(0);
-					$table->setCellPadding(3);
-	
-					$table->setCaption("Top $JKFlow::scorekeep by " .
-						"<b>$key $srcdst $direction</b><br>\n" .
-						"for five minute flow sample ending " .
-						scalar(localtime($self->{filetime})),
-						'TOP');
-
-					my $row = 1;
-					$table->addRow('<b>rank</b>',
-						"<b>$srcdst Address</b>",
-						'<b>bits/sec in</b>',
-						'<b>bits/sec out</b>',
-						'<b>pkts/sec in</b>',
-						'<b>pkts/sec out</b>',
-						'<b>flows/sec in</b>',
-						'<b>flows/sec out</b>');
-
-					$table->setRowBGColor($row, '#FFFFCC'); # pale yellow
-
-					# Highlight the current column (out is 1 off from in)
-					$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction),'#90ee90'); # light green
-					$row++;
-
-					# Get the in and out hr's for ease of use
-					my ($in, $out);
-	
-					for($i=0;$i < @sorted; $i++) {
-						last unless $i < $JKFlow::SCOREKEEP;
-						$item = $sorted[$i];
-	
-						if (!(defined($newaggdata{$type}{$item}))) { # Add this to aggdata 1x
-							$newaggdata{$type}{$item} = {
-								'bytesin'  => $ref->{$type}{$srcdst}{bytes}{$item}{in} * $samplerate,
-								'bytesout' => $ref->{$type}{$srcdst}{bytes}{$item}{out} * $samplerate,
-								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in} * $samplerate,
-								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out} * $samplerate,
-								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in} * $samplerate,
-								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $samplerate
-							};
-						}
-
-						#if (!(defined($dnscache{$ip}))) { # No name here?
-						#if ($dnscache{$ip} = gethostbyaddr(pack("C4",split(/\./, $ip)),AF_INET)) {
-						#	if (1==0) {
-						#		$dnscache{$ip} .= "<br>$ip";
-						#	} else {
-						#		$dnscache{$ip} = $ip;
-						#	}
-						#}
-
-						$table->addRow( sprintf("#%d",$i+1),
-						#$dnscache{$ip},      # IP Name/Address
-						$item,						
-
-						# Bits/sec in
-						scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{in}*8)/$JKFlow::SAMPLETIME),
-
-						# Bits/sec out
-						scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{out}*8)/$JKFlow::SAMPLETIME),
-					
-						# Pkts/sec in
-						scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{in}/$JKFlow::SAMPLETIME)),
-				
-						# Pkts/sec out
-						scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{out}/$JKFlow::SAMPLETIME)),
-				
-						# Flows/sec in
-						scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{in}/$JKFlow::SAMPLETIME)),
-				
-						# Flows/sec out
-						scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{out}/$JKFlow::SAMPLETIME)) );
-
-						$table->setRowAlign($row, 'RIGHT');
-						$table->setCellBGColor($row,
-						$columns{$key} + ('out' eq $direction),
-						'#add8e6'); # light blue
-						$row++;
-	  	  			}
-	   	 		print HTML "<p>\n$table</p>\n\n";
-     	     			}
-			}
-		}    
-		# Print footers
-		print HTML "\n</center>\n</body>\n</html>\n";
-
-		# Close the file, and make $scorepage point at this page
-		close HTML;
-
-		# Update links
-		if (defined $ref->{latest}{$type}) {
-			if ($ref->{latest}{$type} !~ /^\/.*/) {
-				unlink $JKFlow::SCOREDIR.$dir.$ref->{latest}{$type} ||
-					warn "Could not remove ".$JKFlow::SCOREDIR.$dir.$ref->{latest}{$type}." ($!)\n";
-				symlink $file, $JKFlow::SCOREDIR.$dir.$ref->{latest}{$type} ||
-					warn "Could not create symlink to $JKFlow::SCOREDIR.$dir.$ref->{latest}{$type} ($!)\n";
-			} else {
-				unlink $ref->{latest}{$type} ||
-					warn "Could not remove ".$ref->{latest}{$type}." ($!)\n";
-				symlink $file, $ref->{latest}{$type} ||
-					warn "Could not create symlink to ".$ref->{latest}{$type}." ($!)\n";
-			}
-		}
-	
-	##### AGGDATA ######
-	
-	&countAggdata($dir,$ref->{aggscoreboard}{$type},\%{$newaggdata{$type}});
-	
-	}
-	
-	if (defined $ref->{hosts}) {
-		delete $ref->{hosts}{src};
-		delete $ref->{hosts}{dst};
-	}
-	if (defined $ref->{ports}) {
-		delete $ref->{ports}{src};
-		delete $ref->{ports}{dst};
-	}
-	return;
-}
-
-sub countAggdata($) {
-
-	my $dir=shift;
-	my $ref=shift;
-	my $newaggdata=shift;
-	my %aggdata;
-
-	# First, should we read in the aggregate data?
-	if ($ref->{scorekeep} > 0) {
-		%aggdata = &readAggFile($JKFlow::SCOREDIR.$dir."aggtmpdata");
-	}
-
-	if ($ref->{scorekeep} > 0) {
-		# Merge newaggdata and aggdata
-		foreach my $porthost (keys %{$newaggdata}) {
-			$aggdata{$porthost}{'count'}++;
-			$aggdata{$porthost}{'bytesin'}  += $newaggdata->{$porthost}{'bytesin'};
-			$aggdata{$porthost}{'bytesout'} += $newaggdata->{$porthost}{'bytesout'};
-			$aggdata{$porthost}{'pktsin'}   += $newaggdata->{$porthost}{'pktsin'};
-			$aggdata{$porthost}{'pktsout'}  += $newaggdata->{$porthost}{'pktsout'};
-			$aggdata{$porthost}{'flowsin'}  += $newaggdata->{$porthost}{'flowsin'};
-			$aggdata{$porthost}{'flowsout'} += $newaggdata->{$porthost}{'flowsout'};
-		}
-
-		# Increment counter
-		$aggdata{'numresults'}++;
-	
-		if ($aggdata{'numresults'} > $ref->{numkeep}) {
-		
-			# Prune this shit
-			$aggdata{'numresults'} >>= 1;
-			foreach $ip (keys %aggdata) {
-				next if ($ip =~ /numresults/);           # Skip this, not a ref
-				if ($aggdata{$ip}->{'count'} == 1) {     # Delete singletons
-					delete $aggdata{$ip};
-				} else {
-					$aggdata{$ip}{'count'}    >>= 1;   # Divide by 2
-					$aggdata{$ip}{'bytesin'}  >>= 1;
-					$aggdata{$ip}{'bytesout'} >>= 1;
-					$aggdata{$ip}{'pktsin'}   >>= 1;
-					$aggdata{$ip}{'pktsout'}  >>= 1;
-					$aggdata{$ip}{'flowsin'}  >>= 1;
-					$aggdata{$ip}{'flowsout'} >>= 1;
-				}
-			}
-		}
-	}
-	
-	use Data::Dumper;
-	print Dumper(%aggdata);
-	# Write the aggregate table
-	#use Data::Dumper;
-	#print Dumper($ref->{hosts}{aggscoreboard});
-	&writeAggScoreboard(\%aggdata, $ref, $JKFlow::SCOREDIR.$dir.$ref->{file});
-	
-	# Save the aggregation data
-	&writeAggFile(\%aggdata,$JKFlow::SCOREDIR.$dir."aggtmpdata");
-
 }
 
 # Simple percentifier, usage percent(1,10) returns 10
