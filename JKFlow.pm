@@ -91,19 +91,9 @@ my(%SERVICES);			# A hashtable containing services we are
 				# and that it has label 'www'
 my(%myservices);
 my(%myalllist);
-my($which);
 my($subnet);
 
 my($OUTDIR) = '.';		# The directory we will stow rrd files in
-
-#my($scorekeep) = 0;	        # The top N addresses to report on. By default
-				# don't keep scoreboards.
-#my($scoredir)  = undef;		# The directory to put the tree of reports in
-#my($scorepage) = undef;		# The link to the current page
-
-#my($aggscorekeep) = 0;		# Do not create an overall rankings file
-
-#$JKFlow::NUMKEEP = 50;		# How many aggregates to keep
 
 $JKFlow::multicast = 0;		# Do multicast? Default no.
 
@@ -125,7 +115,13 @@ sub parseConfig {
 	$JKFlow::OUTDIR = $config->{outputdir};
 
 	if (defined $config->{all}) {
-
+		if (defined $config->{'all'}{'localsubnets'}) {
+			$JKFlow::mylist{'all'}{'localsubnets'}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$config->{all}{'localsubnets'})) {
+				print "All: + localsubnets subnet $subnet\n";
+				$JKFlow::mylist{'all'}{'localsubnets'}->add_string($subnet);
+			}
+		}
 		pushServices(
 			$config->{all}{services},
 			\%{$JKFlow::mylist{'all'}{'service'}});
@@ -166,8 +162,16 @@ sub parseConfig {
 
 	#use Data::Dumper;
 	foreach my $routername (keys %{$config->{routers}{router}}) {
+		print "Routers: + router $routername\n";
+		if (defined $config->{routers}{router}{$routername}{localsubnets}) {
+			$JKFlow::mylist{routers}{router}{$routername}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$config->{routers}{router}{$routername}{localsubnets})) {
+				print "Routers: router $routername + localsubnets subnet $subnet\n";
+				$JKFlow::mylist{routers}{router}{$routername}{localsubnets}->add_string($subnet);
+			}
+		}
 		foreach my $router (split(/,/,$config->{routers}{router}{$routername}{routers})) {
-			print "Adding router $router \n";
+			print "Routers: router $routername + routerip $router\n";
 			$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
 		}
 		pushServices(
@@ -208,9 +212,17 @@ sub parseConfig {
 	}
 
 	foreach my $subnetname (keys %{$config->{subnets}{subnet}}) {
+		print "Subnets: + subnet $subnetname\n";
+		if (defined $config->{subnets}{subnet}{$subnetname}{localsubnets}) {
+			$JKFlow::mylist{subnets}{subnet}{$subnetname}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$config->{subnets}{subnet}{$subnetname}{localsubnets})) {
+				print "Subnets: subnet $subnetname + localsubnets subnet $subnet\n";
+				$JKFlow::mylist{subnets}{subnet}{$subnetname}{localsubnets}->add_string($subnet);
+			}
+		}
 		${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 		foreach my $subnet (split(/,/,$config->{subnets}{subnet}{$subnetname}{subnets})) {
-			print "Adding subnet $subnet \n";
+			print "Subnets: subnet $subnetname + subnet $subnet\n";
 			${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->add_string($subnet);
 			$JKFlow::SUBNETS->add_string($subnet);
 		}
@@ -375,9 +387,7 @@ my $ref=shift;
 my ($srv,$proto,$start,$end,$tmp,$i);
 
 	foreach my $direction (keys %{$refxml}) {
-		#use Data::Dumper;
-		#print "refxml=".Dumper($refxml)."\n";
-		#print "ref=".Dumper($ref)."\n";
+		print "Adding direction $direction\n";
 		if (! defined $refxml->{'name'}) {
 			$refxml->{'name'}="default";
 		}
@@ -467,6 +477,7 @@ sub _init {
 # needs to be as fast and as short as possible.
 sub wanted {
     my $self = shift;
+    my $which;
 
     	# ######### Are the flows Inbound or outbound? #########
 	# The decision is based on the destination address of the flow
@@ -483,7 +494,13 @@ sub wanted {
 
 	# Counting ALL
 	if (defined $JKFlow::mylist{'all'}) {
-
+		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
+			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
+				$which = 'in';
+			} else {
+				$which = 'out';
+			}
+		}
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
 		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
 		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
@@ -495,6 +512,13 @@ sub wanted {
 
 	# Counting for specific Routers
 	foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
+		if (defined $JKFlow::mylist{'router'}{$routername}{'localsubnets'}) {
+			if ($JKFlow::mylist{'router'}{$routername}{'localsubnets'}->match_integer($dstaddr)) {
+				$which = 'in';
+			} else {
+				$which = 'out';
+			}
+		}
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
@@ -509,7 +533,13 @@ sub wanted {
 	foreach my $subnetname (keys %{$JKFlow::mylist{'subnet'}}) {
 	   	if (($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) 
 	   	|| ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr))) { 
-			if (${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
+			if (defined $JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}) {
+				if ($JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}->match_integer($dstaddr)) {
+					$which = 'in';
+				} else {
+					$which = 'out';
+				}
+			} elsif (${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
 				$which = 'in';
 			} else {
 				$which = 'out';
@@ -631,12 +661,13 @@ sub countpackets {
 		}
 	}
 	if (defined $ref->{'ftp'}) {
-       		countftp(\%{$ref->{'ftp'}});
+       		countftp(\%{$ref->{'ftp'}},$which);
 	}
 }
 
 sub countftp {
 	my $ref = shift;
+	my $which = shift;
 	if (	($srcport == 21) || ($dstport == 21) 
 		|| ($srcport == 20) || ($dstport == 20) 
 		|| (($srcport >= 1024) && ($dstport >= 1024))) {
@@ -646,15 +677,21 @@ sub countftp {
 				$ref->{'dst'}{$which}{'flows'}++;
 				$ref->{'dst'}{$which}{'bytes'} += $bytes;
 				$ref->{'dst'}{$which}{'pkts'} += $pkts;
-				use Data::Dumper;
-				print Dumper($ref->{cache})."\n";
+				#if (($srcport == 20) || ($dstport == 20)) {
+				#	print "Active FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
+				#} else {
+				#	print "Passive FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
+				#}	
 				$ref->{cache}{"$dstaddr:$srcaddr"} = $endtime;
 			} elsif ( defined $ref->{cache}{"$srcaddr:$dstaddr"} ) {
 				$ref->{'src'}{$which}{'flows'}++;
 				$ref->{'src'}{$which}{'bytes'} += $bytes;
 				$ref->{'src'}{$which}{'pkts'} += $pkts;
-				use Data::Dumper;
-				print Dumper($ref->{cache})."\n";
+				#if (($srcport == 20) || ($dstport == 20)) {
+				#	print "Active FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
+				#} else {
+				#	print "Passive FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
+				#}	
 				$ref->{cache}{"$srcaddr:$dstaddr"} = $endtime;
 			} 
 		} elsif ($dstport == 21) {
@@ -662,14 +699,14 @@ sub countftp {
 			$ref->{'dst'}{$which}{'bytes'} += $bytes;
 			$ref->{'dst'}{$which}{'pkts'} += $pkts;
 			if (!defined $ref->{cache}{"$dstaddr:$srcaddr"}) {
-				$ref->{cache}{"$dstaddr:$srcaddr"}=0;
+				$ref->{cache}{"$dstaddr:$srcaddr"}=$endtime;
 			}
 		} elsif ($srcport == 21) {
 			$ref->{'src'}{$which}{'flows'}++;
 			$ref->{'src'}{$which}{'bytes'} += $bytes;
 			$ref->{'src'}{$which}{'pkts'} += $pkts;
 			if (!defined $ref->{cache}{"$srcaddr:$dstaddr"}) {
-				$ref->{cache}{"$srcaddr:$dstaddr"}=0;
+				$ref->{cache}{"$srcaddr:$dstaddr"}=$endtime;
 			}
 		}	
 	}
@@ -858,10 +895,10 @@ sub reporttorrdfiles {
 			reporttorrd($self,$file,\%{$ref->{'ftp'}{$src}});
 		}
 		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
-			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 30*60 ||
-			    $self->{filetime}-$ref->{'ftp'}{cache}{$pair} < -5 * 60 ) {
+			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 2*60*60 ||
+			    $self->{filetime}-$ref->{'ftp'}{cache}{$pair} < -15 * 60 ) {
+				#print "Deleted FTP-session: $pair Timediff:".($self->{filetime}-$ref->{'ftp'}{cache}{$pair})."\n";	
 				delete($ref->{'ftp'}{cache}{$pair});
-				print "Deleted FTP-session: $pair \n";	
 			}
 		}
 	}

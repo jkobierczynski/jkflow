@@ -89,6 +89,7 @@ my %definedcolors =	(
 			'web' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
 			'secureweb' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
 			'tcp_http' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
+			'ftp' => 		{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
 			'tcp_ftp' => 		{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
 			'tcp_ftp-data' => 	{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
 			'tcp_netbios-ns' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
@@ -264,7 +265,7 @@ sub showMenu {
 	
 	print $q->td( { -rowspan => '1' },
 		"Predefined Colors: ",
-		$q->checkbox( -name => "predefinedcolors",-value => '1',-label => 'Yes' ));
+		$q->checkbox( -name => "predefinedcolors",-value => '1',-checked => 'on',-label => 'Yes' ));
 
 	print $q->end_Tr();
 	print $q->end_table();
@@ -490,7 +491,7 @@ sub getColor {
     	my $refcolor=shift;
     	my $tag = shift;
 	my $direction = shift;
-    	if (defined $definedcolors{$tag} && param('predefinedcolors') eq 1)  {
+    	if (defined param('predefinedcolors') && param('predefinedcolors') eq 1 && defined $definedcolors{$tag})  {
     		return sprintf('#%06x', $definedcolors{$tag}{$direction});
     	} else {
     		my $shiftcolor = shift @{$refcolor};
