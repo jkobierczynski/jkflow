@@ -7,13 +7,17 @@
 			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
 			<application name="dns">53/udp,53/tcp</application>
 			<services>22-23/tcp,25/tcp,102/tcp,119/tcp</services>
+			<otherservices/>
 			<ftp/>
 			<total/>
 		</defineset>
 		<defineset name="Extra Services">
 			<protocols>tcp,udp,icmp</protocols>
+			<otherprotocols/>
 			<multicast/>
 			<tos/>
+			<scoreboard hosts="1" ports="1"/>
+			<scoreboardother hosts="1" ports="1"/>
 		</defineset>
 	</definesets>
 	<sites>

@@ -246,12 +246,23 @@ my $ref=shift;
 	if (defined $refxml->{total} && !defined $ref->{total}) {
 		$ref->{total}={};
 	}
+	if (defined $refxml->{monitor} && $refxml->{monitor} == "yes" && !defined $ref->{monitor}) {
+		$ref->{monitor}="yes";
+	}
 	if (defined $refxml->{scoreboard}) {
 		if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
 			$ref->{scoreboard}{hosts}={};
 		}
 		if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
 			$ref->{scoreboard}{ports}={};
+		}
+	}
+	if (defined $refxml->{scoreboardother}) {
+		if (defined $refxml->{scoreboardother}{hosts} && $refxml->{scoreboardother}{hosts} =="1" && !defined $ref->{scoreboardother}{hosts}) {
+			$ref->{scoreboardother}{hosts}={};
+		}
+		if (defined $refxml->{scoreboardother}{ports} && $refxml->{scoreboardother}{ports}=="1" && !defined $ref->{scoreboardother}{ports}) {
+			$ref->{scoreboardother}{ports}={};
 		}
 	}
 }
@@ -889,6 +900,7 @@ EOF
 		$countpackets.= <<'EOF';
 		} elsif ( countftp(\%{$ref->{'ftp'}},$which) ) {
 EOF
+		}
 	}
 	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'}) {
 	$countpackets.= <<'EOF';
@@ -898,11 +910,35 @@ EOF
 			$ref->{'application'}{'other'}{'dst'}{$which}{'pkts'} += $pkts;
 EOF
 	}
+	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{hosts}) {
+	$countpackets.= <<'EOF';
+			$refref=$ref->{'scoreboardother'}{hosts};
+			$refref->{'dst'}{'flows'}{$dstip}{$which} ++;
+			$refref->{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
+			$refref->{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
+			$refref->{'src'}{'flows'}{$srcip}{$which} ++;
+			$refref->{'src'}{'bytes'}{$srcip}{$which} += $bytes;
+			$refref->{'src'}{'pkts'}{$srcip}{$which} += $pkts;
+
+EOF
+	}
+
+	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{ports}) {
+	$countpackets.= <<'EOF';
+			$refref=$ref->{'scoreboardother'}{ports};
+			$refref->{'dst'}{'flows'}{$dstport}{$which} ++;
+			$refref->{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
+			$refref->{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
+			$refref->{'src'}{'flows'}{$srcport}{$which} ++;
+			$refref->{'src'}{'bytes'}{$srcport}{$which} += $bytes;
+			$refref->{'src'}{'pkts'}{$srcport}{$which} += $pkts;
+	
+EOF
+	}
 	$countpackets.= <<'EOF';
 		}
 	}
 EOF
-	}
 	if (!defined $ref->{'service'} && defined $ref->{'ftp'}) {
 	
 	$countpackets.= <<'EOF';
@@ -937,7 +973,7 @@ EOF
 
 	if ($ref->{'monitor'} eq "yes") {
 	$countpackets.= <<'EOF';
-	print "SRC = ".inet_ntoa(pack(N,$srcaddr)).", DST = ".inet_ntoa(pack(N,$dstaddr))."\n";
+	print "SRC=".inet_ntoa(pack(N,$srcaddr)).", SPORT=".$srcport.", DST=".inet_ntoa(pack(N,$dstaddr)).", DPORT=".$dstport.", EXP=".inet_ntoa(pack(N,$exporter))."\n";
 
 EOF
 	}
@@ -1009,13 +1045,15 @@ sub perfile {
 
 sub reporttorrd {
 
- 	use RRDs;			# To actually produce results
+	use RRDs;			# To actually produce results
 	my $self=shift;
-	my $file=shift;
+	my $dir=shift;
+	my $name=shift;
 	my $ref=shift;
 	my $samplerate=shift;
 	my $tmp;
 	my @values = ();
+	my $file=$JKFlow::RRDDIR."/".$dir."/".$name;
 
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
@@ -1041,8 +1079,8 @@ sub reporttorrd {
 			}
 		}
 	}
-	$self->updateRRD($file, @values);
-	#print "File: $file @values\n";
+	$self->updateRRD($dir,$name, @values);
+	#print "File: $dir $name @values\n";
 }
 
 sub reporttorrdfiles {
@@ -1058,20 +1096,17 @@ sub reporttorrdfiles {
 	# createGeneralRRD we get from our parent, FlowScan
  	# Create a new rrd if one doesn't exist
 	if (defined $ref->{'total'}) {	
-		$file = $JKFlow::RRDDIR . $dir . "/total.rrd";
-		reporttorrd($self,$file,\%{$ref->{'total'}},$samplerate);
+		reporttorrd($self,$dir,"total.rrd",\%{$ref->{'total'}},$samplerate);
 	}
 
 	if (defined $ref->{'tos'}) {	
 		foreach my $tos ('normal','other') {
-			$file = $JKFlow::RRDDIR . $dir . "/tos_". $tos . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}},$samplerate);
+			reporttorrd($self,$dir,"tos_". $tos . ".rrd",\%{$ref->{'tos'}{$tos}},$samplerate);
  		}
 	}
 
 	if (defined $ref->{'multicast'}) {	
-		$file = $JKFlow::RRDDIR . $dir . "/protocol_multicast.rrd";
-		reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}},$samplerate);
+		reporttorrd($self,$dir,"protocol_multicast.rrd",\%{$ref->{'multicast'}{'total'}},$samplerate);
 	}
 
 	if (defined $ref->{'protocol'}) {	
@@ -1082,24 +1117,21 @@ sub reporttorrdfiles {
 			if ($protocol eq 'other') {
 				$tmp = 'other';
 			}
-			$file = $JKFlow::RRDDIR. $dir . "/protocol_" . $tmp . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
+			reporttorrd($self,$dir,"protocol_" . $tmp . ".rrd",\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
 		}
 	}
 
 	if (defined $ref->{'application'}) {	
 		foreach my $src ('src','dst') {
 			foreach my $application (keys %{$ref->{'application'}}) {
-  	     			$file = $JKFlow::RRDDIR. $dir . "/service_" . $application . "_" . $src . ".rrd";
-				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}},$samplerate);
+				reporttorrd($self,$dir,"service_" . $application . "_" . $src . ".rrd",\%{$ref->{'application'}{$application}{$src}},$samplerate);
 			}
 		}
 	}
 
 	if (defined $ref->{'ftp'}) {	
-		foreach my $src ('src','dst') { 
-  	     		$file = $JKFlow::RRDDIR. $dir . "/service_ftp_" . $src . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'ftp'}{$src}},$samplerate);
+		foreach my $src ('src','dst') {
+			reporttorrd($self,$dir,"service_ftp_" . $src . ".rrd",\%{$ref->{'ftp'}{$src}},$samplerate);
 		}
 		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
 			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 2*60*60 ||
@@ -1113,7 +1145,10 @@ sub reporttorrdfiles {
 	if (defined $ref->{'scoreboard'}) {
 		scoreboard($self, $dir . "/" . $direction, \%{$ref->{'scoreboard'}} );
 	}
-
+	if (defined $ref->{'scoreboardother'}) {
+		scoreboard($self, $dir . "/" . $direction . "/other" , \%{$ref->{'scoreboardother'}} );
+	}
+	
 	if (defined $ref->{'direction'}) {
 		foreach my $direction (keys %{$ref->{'direction'}}) {
 			if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
@@ -1143,6 +1178,9 @@ sub report {
 		if (! -d $JKFlow::SCOREDIR."/all" ) {
 			mkdir($JKFlow::SCOREDIR."/all",0755);
 		}
+		if (! -d $JKFlow::SCOREDIR."/all/other" ) {
+			mkdir($JKFlow::SCOREDIR."/all/other",0755);
+		}
 		reporttorrdfiles($self, $dir."/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
 
@@ -1153,6 +1191,9 @@ sub report {
 		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
 			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
 		}
+		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction . "/other" ) {
+			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction . "/other" ,0755);
+		}
 		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
 	}   
 }
@@ -1161,12 +1202,13 @@ sub report {
 # I think perhaps this goes into FlowScan.pm, but...
 sub updateRRD {
    my $self = shift;
+   my $dir = shift;
    my $file = shift;
    my @values = @_;
 
-   RRDs::update($file, $self->{filetime} . ':' . join(':', @values));
+   RRDs::update($JKFlow::RRDDIR."/".$dir."/".$file, $self->{filetime} . ':' . join(':', @values));
    my $err=RRDs::error;
-   warn "ERROR updating $file: $err\n" if ($err);
+   warn "ERROR updating $JKFlow::RRDDIR."/".$dir."/".$file: $err\n" if ($err);
 }
 
 # Function to read in the current aggregate data
@@ -1390,10 +1432,10 @@ sub scoreboard {
 			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
 		}
 
- 		$file = sprintf("%s/%2.2d",$file,$hour);
-		if (! -d $file) {
-			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		}
+ 		#$file = sprintf("%s/%2.2d",$file,$hour);
+		#if (! -d $file) {
+		#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+		#}
     
 		$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
 		open(HTML,">$file") || die "Could not write to $file ($!)\n";
