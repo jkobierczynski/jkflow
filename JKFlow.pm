@@ -837,50 +837,6 @@ sub perfile {
     $self->SUPER::perfile(@_);
 }
 
-sub summarize {
-   my $sumref = shift;
-   my $addref = shift;
-   my $samplerate = shift;
-   my $typeos;
-
-   foreach my $type ('bytes','pkts','flows') {
-      foreach my $which ('in','out') {
-		if (defined $addref->{'protocol'}) {
-			foreach my $protocol (keys %{$addref->{'protocol'}}) { 
-				$sumref->{'protocol'}{$protocol}{'total'}{$which}{$type} 
-					+= $addref->{'protocol'}{$protocol}{'total'}{$which}{$type}*$samplerate;
-			}
-		}
-
-		if (defined $addref->{'service'}) {
-			foreach my $protocol (keys %{$addref->{'service'}}) { 
-				foreach my $service (keys %{$addref->{'service'}{$protocol}}) {
-					$sumref->{'service'}{$protocol}{$service}{'src'}{$which}{$type} 
-						+= $addref->{'service'}{$protocol}{$service}{'src'}{$which}{$type}*$samplerate;
-					$sumref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type} 
-						+= $addref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type}*$samplerate;
-				}
-			}
-		}
-
-		if (defined $addref->{'multicast'}) {
-         		$sumref->{'multicast'}{'total'}{$which}{$type} 
-				+= $addref->{'multicast'}{'total'}{$which}{$type}*$samplerate;
-		}
-		if (defined $addref->{'tos'}) {
-			foreach my $typeos ('normal','other') {
-			$sumref->{'tos'}{$typeos}{$which}{$type}
-				+= $addref->{'tos'}{$typeos}{$which}{$type}*$samplerate;
-			}
-		}
-		if (defined $addref->{'total'}) {
-			$sumref->{'total'}{$which}{$type} 
-				+= $addref->{'total'}{$which}{$type}*$samplerate;
-		}
-      }
-   }
-}   
-
 sub reporttorrd {
 
  	use RRDs;			# To actually produce results
