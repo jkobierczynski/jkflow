@@ -479,77 +479,55 @@ sub wanted {
     my $self = shift;
     my $which;
 
-    	# ######### Are the flows Inbound or outbound? #########
-	# The decision is based on the destination address of the flow
-	# is included in one of the subnets defined in the subnets element
-	# in the JKFlow.xml file. If no subnets were defined, then all
-	# flows are outbound!
-
-	if ($JKFlow::SUBNETS->match_integer($dstaddr)) {
-		$which = 'in';
-	} else {
-		$which = 'out';
-	}
-
-
 	# Counting ALL
 	if (defined $JKFlow::mylist{'all'}) {
+		$which = 'out';
 		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
 			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
 				$which = 'in';
-			} else {
-				$which = 'out';
-			}
+			} 
 		}
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
 		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
 		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
-    		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        		countmulticasts(\%{$JKFlow::mylist{'all'}},$which);
-		}
 
 	}
 
 	# Counting for specific Routers
 	foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
+		$which = 'out';
 		if (defined $JKFlow::mylist{'router'}{$routername}{'localsubnets'}) {
 			if ($JKFlow::mylist{'router'}{$routername}{'localsubnets'}->match_integer($dstaddr)) {
 				$which = 'in';
-			} else {
-				$which = 'out';
-			}
+			} 
 		}
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
 			countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
-			#only $dstaddr can be a multicast address 
- 	   		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        			countmulticasts(\%{$JKFlow::mylist{'router'}{$routername}},$which);
-			}
 		}
 	}
 	# Couting for specific Subnets
 	foreach my $subnetname (keys %{$JKFlow::mylist{'subnet'}}) {
-	   	if (($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) 
-	   	|| ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr))) { 
-			if (defined $JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}) {
-				if ($JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}->match_integer($dstaddr)) {
-					$which = 'in';
-				} else {
-					$which = 'out';
-				}
-			} elsif (${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
+		$which = '';
+		if (defined $JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}) {
+			if ($JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}->match_integer($dstaddr)) {
 				$which = 'in';
 			} else {
 				$which = 'out';
 			}
+		}
+		if ($which eq 'out' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr)) {
+			$which = 'out';
 			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
 			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
-			if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-	        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
-			}
+		}
+		elsif ($which eq 'in' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
+			$which = 'in';
+			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
+			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
+			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
 		}
 	}
 	# Counting Directions for specific Networks
@@ -591,9 +569,6 @@ my $which=shift;
 	 			countpackets (\%{$ref->{$direction}},'in');
 				countApplications(\%{$ref->{$direction}{application}},'in');
 		}
-	    	if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        		countmulticasts(\%{$ref->{$direction}});
-		}
 		countDirections(\%{$ref->{$direction}{'direction'}},$which);
 	}
 }
@@ -619,8 +594,6 @@ sub countApplications {
 	}
 }
 
-
-
 sub countpackets {
     	my $ref = shift;
     	my $which = shift;
@@ -640,13 +613,16 @@ sub countpackets {
 		$ref->{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
 		$ref->{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
 	}
+	if (defined $ref->{'multicast'} && 
+		(($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET)) {
+		$ref->{'multicast'}{'total'}{$which}{'flows'}++;
+		$ref->{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
+		$ref->{'multicast'}{'total'}{$which}{'pkts'} += $pkts;
+	}
 	if ((defined $ref->{'protocol'}) && (defined $ref->{'protocol'}{$protocol})) {
       		$ref->{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'pkts'} += $pkts;
-		$ref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{'flows'}++;
-		$ref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
-		$ref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
 	}
 	if ((defined $ref->{'service'}) && (defined $ref->{'service'}{$protocol})) {
 		if (defined $ref->{'service'}{$protocol}{$dstport}) {
@@ -712,25 +688,6 @@ sub countftp {
 	}
 }
 
-sub countmulticasts {
-    my $ref = shift;
-    my $which = shift;
-    my $typeos;
-	if (defined $ref->{'multicast'}) {
-		$ref->{'multicast'}{'total'}{$which}{'flows'}++;
-		$ref->{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
-		$ref->{'multicast'}{'total'}{$which}{'pkts'} += $pkts;
-		if ($tos == 0) {
-			$typeos="normal";
-		} else {
-			$typeos="other"; 
-		}
-		$ref->{'multicast'}{'tos'}{$typeos}{$which}{'flows'}++;
-		$ref->{'multicast'}{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
-		$ref->{'multicast'}{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
-	}
-} 
-
 sub perfile {
     # Only do this, so we get the filetime from our super-class
     my $self = shift;
@@ -751,10 +708,6 @@ sub summarize {
 			foreach my $protocol (keys %{$addref->{'protocol'}}) { 
 				$sumref->{'protocol'}{$protocol}{'total'}{$which}{$type} 
 					+= $addref->{'protocol'}{$protocol}{'total'}{$which}{$type};
-				foreach my $typeos ('normal','other') {
-					$sumref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type}
-						+= $addref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type};
-				}
 			}
 		}
 
@@ -772,10 +725,6 @@ sub summarize {
 		if (defined $addref->{'multicast'}) {
          		$sumref->{'multicast'}{'total'}{$which}{$type} 
 				+= $addref->{'multicast'}{'total'}{$which}{$type};
-			foreach my $typeos ('normal','other') {
-				$sumref->{'multicast'}{'tos'}{$typeos}{$which}{$type} 
-					+= $addref->{'multicast'}{'tos'}{$typeos}{$which}{$type};
-			}
 		}
 		if (defined $addref->{'tos'}) {
 			foreach my $typeos ('normal','other') {
