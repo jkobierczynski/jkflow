@@ -306,7 +306,7 @@ sub parseConfig {
 		pushProtocols(
 			$config->{routers}{router}{$router}{protocols},
 			\%{$JKFlow::mylist{'router'}{$routerip}{'protocol'}});
-		pushApplications(
+		pushDirections(
 			$config->{routers}{router}{$router}{direction},
 			\%{$JKFlow::mylist{'router'}{$routerip}{direction}});
 		if (defined $config->{routers}{router}{$router}{tos}) {
@@ -333,7 +333,7 @@ sub parseConfig {
 		pushProtocols(
 			$config->{subnets}{subnet}{$subnet}{protocols},
 			\%{$JKFlow::mylist{'subnet'}{$subnet}{'protocol'}});
-		pushApplications(
+		pushDirections(
 			$config->{subnets}{subnet}{$subnet}{direction},
 			\%{$JKFlow::mylist{'subnet'}{$subnet}{direction}});
 		if (defined $config->{subnets}{subnet}{$subnet}{tos}) {
@@ -345,7 +345,7 @@ sub parseConfig {
 	}
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
-		pushApplications(
+		pushDirections(
 			$config->{networks}{network}{$network}{direction},
 			\%{$JKFlow::mylist{'network'}{$network}{direction}});
 #		foreach my $application (keys %{$config->{networks}{network}{$network}{application}{service}}) {
@@ -674,14 +674,14 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 	}
 }
 
-sub pushApplications {
+sub pushDirections {
 my $refxml=shift;
 my $ref=shift;
 my ($srv,$proto,$start,$end,$tmp,$i);
 
-	use Data::Dumper;
-	print "refxml=".Dumper($refxml)."\n";
-	print "ref=".Dumper($ref)."\n";
+	#use Data::Dumper;
+	#print "refxml=".Dumper($refxml)."\n";
+	#print "ref=".Dumper($ref)."\n";
 	if (! defined $refxml->{'name'}) {
 		$refxml->{'name'}="default";
 	}
@@ -723,6 +723,20 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}	
 	}
+	if (defined $refxml->{'services'}) {
+		$ref->{$refxml->{'name'}}{service}={};
+		pushServices(
+			$refxml->{'services'},
+			$ref->{$refxml->{'name'}}{service});
+	}
+	if (defined $refxml->{'protocols'}) {
+		$ref->{$refxml->{'name'}}{protocol}={};
+		pushProtocols(
+			$refxml->{'protocols'},
+			$ref->{$refxml->{'name'}}{protocol});
+	}
+	use Data::Dumper;
+	print Dumper($ref)."\n";
 }
 
 sub new {
