@@ -440,16 +440,15 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		}
 
 		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
+			my %seen = ();
 			my @list = ();
 			if (defined $JKFlow::fromtrie->match_string($fromsubnet)) {
 				my @tmplist = @{$JKFlow::fromtrie->match_string($fromsubnet)};
 				if (defined $tmplist[0]) {
-					use Data::Dumper;
-					print Dumper(@tmplist)."\n";
 					push @list,  @tmplist;
 				}
 			}
-			push @list, $fromsubnet;
+			@list = grep { ! $seen{$_} ++ } ( @list, $fromsubnet );
 			$JKFlow::fromtrie->add_string($fromsubnet,\@list);
 		}
 
@@ -462,16 +461,15 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		}
 
 		foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
+			my %seen = ();
 			my @list = ();
                      	if (defined $JKFlow::totrie->match_string($tosubnet)) {
 				my @tmplist = @{$JKFlow::totrie->match_string($tosubnet)};
 				if (defined $tmplist[0]) {
-					use Data::Dumper;
-					print Dumper(@tmplist)."\n";
 					push @list,  @tmplist;
 				}
 			}
-			push @list, $tosubnet;
+			@list = grep { ! $seen{$_} ++ } ( @list, $tosubnet );
 			$JKFlow::totrie->add_string($tosubnet,\@list);
 		}
 		#END NEW CODE
@@ -642,21 +640,25 @@ sub countDirections2 {
 		if (defined ($dstsubnets = $JKFlow::totrie->match_integer($dstaddr))) {
 			foreach my $srcsubnet (@{$srcsubnets}) {
 				foreach my $dstsubnet (@{$dstsubnets}) {
-					#print "SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
-					countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'out');
-					countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'out');
+					if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}) {
+						#print "SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
+						countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'out');
+						countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'out');
+					}
 				}
 			}
 		}
 	}
 
-        if (defined ($srcsubnets = $JKFlow::totrie->match_integer($srcaddr))) {
-        	if (defined ($dstsubnets = $JKFlow::fromtrie->match_integer($dstaddr))) {
-        		foreach my $srcsubnet (@{$srcsubnets}) {
-                		foreach my $dstsubnet (@{$dstsubnets}) {
-					#print "DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
-                        		countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'in');
-                        		countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'in');
+        if (defined ($dstsubnets = $JKFlow::fromtrie->match_integer($dstaddr))) {
+        	if (defined ($srcsubnets = $JKFlow::totrie->match_integer($srcaddr))) {
+        		foreach my $dstsubnet (@{$dstsubnets}) {
+                		foreach my $srcsubnet (@{$srcsubnets}) {
+					if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}) {
+						#print "DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
+                        			countpackets (\%{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}},'in');
+                        			countApplications (\%{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}{application}},'in');
+					}
 				}
 			}
                 }
