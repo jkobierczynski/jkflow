@@ -254,8 +254,9 @@ my(%SERVICES);			# A hashtable containing services we are
 				# means that we are interested in www/tcp
 				# and that it has label 'www'
 my(%myservices);
-my(%mysubnetstats);
 my(%mysubnetlist);
+my(%myrouterlist);
+my(%myalllist);
 my(%PROTOCOLS);			# A hashtable containing protocols we are
 				# interested in. E.g.: 
 				# $PROTOCOLS{6} = 'tcp';
@@ -284,7 +285,7 @@ $CUFlow::SUBNETS = new Net::Patricia || die "Could not create a trie ($!)\n";
 sub parseConfig {
     my $file = shift;
     my($ip,$mask,$srv,$proto,$label,$tmp,$txt);
-    my($num,$dir,$current,$start,$end,$hr,$i,$subnet);
+    my($num,$dir,$current,$start,$end,$hr,$i,$subnet,$router);
 
     open(FH,$file) || die "Could not open $file ($!)\n";
 
@@ -297,6 +298,8 @@ sub parseConfig {
 	    $subnet=$1;
 	    $CUFlow::SUBNETS->add_string($subnet);
             $CUFlow::mysubnetlist{$subnet}{'total'} = {};
+            $CUFlow::mysubnetlist{$subnet}{'tos'} = {};
+            $CUFlow::mysubnetlist{$subnet}{'multicast'} = {};
             print "Subnet: $1 Ports: $2\n";
             foreach $current (split(/,/,$2)) {
                 # Parse each item
@@ -337,12 +340,51 @@ sub parseConfig {
                 }
 
 	    }
-	} elsif (/^\s*Router\s+(\d+\.\d+\.\d+\.\d+)\s*(\S+)?\s*$/) {
-	    if (defined $2) {
-		$CUFlow::ROUTERS{$1} = $2;
-	    } else {
-		$CUFlow::ROUTERS{$1} = $1;
-	    }
+	} elsif (/^\s*Router\s+(\d+\.\d+\.\d+\.\d+)\s*(\S+)\s*(.*)$/) {
+            $router=$1;
+	    $CUFlow::myrouterlist{$router}{'name'}={$2};
+            foreach $current (split(/,/,$3)) {
+                # Parse each item
+                if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
+                    $srv   = $1;
+                    $proto = $2;
+
+                    if ($proto !~ /\d+/) { # Not an integer! Try getprotobyname
+                        $tmp = getprotobyname($proto) ||
+                            die "Unknown protocol $proto on line $.\n";
+                        $proto = $tmp;
+                        $CUFlow::myrouterlist{$router}{'total'} = {};
+                        $CUFlow::myrouterlist{$router}{'tos'} = {};
+                        $CUFlow::myrouterlist{$router}{'multicast'} = {};
+                    }
+
+                    if ($srv =~ /(\d+)-?(\d+)?/) { # Numeric or range
+                        $start = $1;
+                        $end = (defined($2)) ? $2 :$start;
+
+                        die "Bad range $start - $end on line $.\n" if
+                            ($end < $start);
+
+                        for($i=$start;$i<=$end;$i++) {
+                            $CUFlow::myrouterlist{$router}{$proto}{$i} = {}; # Save all these ports
+                        }
+                    } else {    # Symbolic or bad?
+                        if ($srv !~ /\d+/) { # Not an integer?
+                            # Try getservbyname
+                            $tmp = getservbyname($srv,
+                                                 getprotobynumber($proto)) ||
+                             die "Unknown service $srv on line $.\n";
+
+                            $srv = $tmp;
+                        }
+                        $CUFlow::myrouterlist{$router}{$proto}{$srv} = {};
+                    }
+                } else {
+                    die "Bad Service item $current on line $.\n";
+                }
+
+            }
+
 	} elsif (/\s*Network\s+(\S+)\s+(\S+)\s*$/) {
 	    $ip    = $1;
 	    $label = $2;
@@ -509,99 +551,117 @@ sub wanted {
     my $hr;
     my $subnet;
 
+    # First, are we inbound or outbound?
+    if ($CUFlow::SUBNETS->match_integer($dstaddr)) {
+        # If the destination is in inside, this is an inbound flow
+        $which = 'in';
+        # Save stats for scoreboarding
+        if (!($hr = $self->{iniplog}->match_integer($dstaddr))) {
+          $hr = $self->{iniplog}->add_string($dstip, { addr => $dstip,
+                                                       bytes => 0,
+                                                       pkts => 0,
+                                                       flows => 0});
+        }
+    } else {
+        # The destination for this flow is not in SUBNETS; it is outbound
+        $which = 'out';
+        # Save stats for scoreboarding
+        if (!($hr = $self->{outiplog}->match_integer($srcaddr))) {
+          $hr = $self->{outiplog}->add_string($srcip, { addr => $srcip,
+                                                        bytes => 0,
+                                                        pkts => 0,
+                                                        flows => 0});
+        }
+    }
+
     # Multicast handling here, it seems to have nexthop and
     # outputIf of zero
     if (($dstaddr & $CUFlow::MCAST_MASK) == $CUFlow::MCAST_NET) {
-	# it is a multicast packet!
-	
 	# First, are we inbound or outbound?
-	if ($CUFlow::SUBNETS->match_integer($srcaddr)) {
+	if ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)) {
 	    $which = 'out';
+            # First update the total counters
+            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'flows'}++;
+            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
+            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'pkts'}  +=$pkts;
 	} else {
 	    $which = 'in';
 	}
-
-	$hr = $self->{exporters}{$exporterip};
-	
-	# Save stats for every protocol, sort out which to log in sub report()
-	$hr->{'multicast'}{$which}{'flows'}++;
-	$hr->{'multicast'}{$which}{'bytes'} += $bytes;
-	$hr->{'multicast'}{$which}{'pkts'}  += $pkts;
-
-	# Also update the totals...
-	$hr->{'total'}{$which}{'flows'}++;
-	$hr->{'total'}{$which}{'bytes'} += $bytes;
-	$hr->{'total'}{$which}{'pkts'}  += $pkts;
-
-	# Now update TOS counters
-	$hr->{'tos'}{$which}{$tos}{'flows'}++;
-	$hr->{'tos'}{$which}{$tos}{'bytes'} += $bytes;
-	$hr->{'tos'}{$which}{$tos}{'pkts'}  += $pkts;
-
-	$self->{exporters}{$exporterip} = $hr;
 	return 1;	
     } 
 
-    #return 0 if ($nexthop == 0);   # Non-routable traffic is dumped.
-    #return 0 if ($output_if == 0); # Dump traffic routed to nowhere
+    #$hr->{bytes} += $bytes;
+    #$hr->{pkts}  += $pkts;
+    #$hr->{flows}++;
 
-    # First, are we inbound or outbound?
-    if ($CUFlow::SUBNETS->match_integer($dstaddr)) {
-	# If the destination is in inside, this is an inbound flow
-	$which = 'in';
-
-	# Save stats for scoreboarding
-	if (!($hr = $self->{iniplog}->match_integer($dstaddr))) {
-	    $hr = $self->{iniplog}->add_string($dstip, { addr => $dstip,
-							 bytes => 0,
-							 pkts => 0,
-							 flows => 0});
-	}
-    } else {
-	# The destination for this flow is not in SUBNETS; it is outbound
-	$which = 'out';
-
-	# Save stats for scoreboarding
-	if (!($hr = $self->{outiplog}->match_integer($srcaddr))) {
-	    $hr = $self->{outiplog}->add_string($srcip, { addr => $srcip,
-							  bytes => 0,
-							  pkts => 0,
-							  flows => 0});
-	}
-    }
-    $hr->{bytes} += $bytes;
-    $hr->{pkts}  += $pkts;
-    $hr->{flows}++;
-
-    $hr = $self->{exporters}{$exporterip};
+    #$hr = $self->{exporters}{$exporterip};
 
     # First update the total counters
-    $hr->{'total'}{$which}{'flows'}++;
-    $hr->{'total'}{$which}{'bytes'} += $bytes;
-    $hr->{'total'}{$which}{'pkts'}  += $pkts;
+    #$CUFlow::myalllist{'total'}{$which}{'flows'}++;
+    #$CUFlow::myalllist{'total'}{$which}{'bytes'} += $bytes;
+    #$CUFlow::myalllist{'total'}{$which}{'pkts'}  +=$pkts;
 
     # Now update TOS counters
-    $hr->{'tos'}{$which}{$tos}{'flows'}++;
-    $hr->{'tos'}{$which}{$tos}{'bytes'} += $bytes;
-    $hr->{'tos'}{$which}{$tos}{'pkts'}  += $pkts;
+    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'flows'}++;
+    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'bytes'} += $bytes;
+    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'pkts'}  += $pkts;
 
     # Save stats for every protocol, sort out which to log in sub report()
-    $hr->{$protocol}{'total'}{$which}{'flows'}++;
-    $hr->{$protocol}{'total'}{$which}{'bytes'} += $bytes;
-    $hr->{$protocol}{'total'}{$which}{'pkts'}  += $pkts;
+    if (defined $CUFlow::myalllist{'protocol'}{$protocol}) 
+      {
+      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
+      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
+      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'pkts'}  += $pkts;
+      }
 
     # Next update service counters in the same fashion
-    $hr->{$protocol}{'src'}{$srcport}{$which}{'flows'}++;
-    $hr->{$protocol}{'src'}{$srcport}{$which}{'bytes'} += $bytes;
-    $hr->{$protocol}{'src'}{$srcport}{$which}{'pkts'}  += $pkts;
+    if (defined $CUFlow::myalllist{'service'}{$protocol}{$srcport}) 
+      {
+      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
+      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
+      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'}  += $pkts;
+      }
+    if (defined $CUFlow::myalllist{'service'}{$protocol}{$dstport}) 
+      {
+      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
+      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
+      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'pkts'}  += $pkts;
+      }
 
-    $hr->{$protocol}{'dst'}{$dstport}{$which}{'flows'}++;
-    $hr->{$protocol}{'dst'}{$dstport}{$which}{'bytes'} += $bytes;
-    $hr->{$protocol}{'dst'}{$dstport}{$which}{'pkts'}  += $pkts;
+   if (defined $CUFlow::myrouterlist{$exporterip}) 
+     {
+          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'flows'}++;
+          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'bytes'} += $bytes;
+          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'pkts'} + $pkts;
+        if (defined($CUFlow::myrouterlist{$exporterip}{$protocol}{'total'})) 
+          {
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'flows'}++;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'bytes'} += $bytes;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'pkts'} + $pkts;
+          }
+        if (defined $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport})
+          {
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'pkts'} + $pkts;
+          }
+        if (defined $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport})
+          {
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
+          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} + $pkts;
+          }
+    }
 
    if (($subnet = $CUFlow::SUBNETS->match_integer($dstaddr)) 
 	|| ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)))
      {
+        #if (defined($CUFlow::mysubnetlist{$subnet}{'tos'})) Impliciet aanwezig
+        #  {
+          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'flows'}++;
+          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'bytes'} += $bytes;
+          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'pkts'} + $pkts;
+        #  }
         if (defined($CUFlow::mysubnetlist{$subnet}{$protocol}{'total'})) 
           {
           $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'flows'}++;
@@ -622,10 +682,7 @@ sub wanted {
           }
     }
     #use Data::Dumper;
-    #print Dumper($CUFlow::mysubnetstats);
     #print Dumper(%CUFlow::mysubnetlist);
-
-    $self->{exporters}{$exporterip} = $hr;
     return 1;
 }
 
@@ -644,7 +701,7 @@ sub report {
     my($routerfile);
     my(@values) = ();
     my(@array);
-    my($hr,$count, $i, $tmp,$srv,$subnetdir);
+    my($hr,$count, $i ,$j ,$k , $tmp,$srv,$subnetdir,$routerdir);
 
     # Zeroth, this takes a lot of time. So let's fork and return
     if (fork()) {		# We are the parent, wait
@@ -656,35 +713,42 @@ sub report {
 	exit if (fork());
     }
 
-    # Make sure directories exist
-    foreach my $k (keys %CUFlow::ROUTERS) {
-	
-	if (! -d "$CUFlow::OUTDIR/" . $CUFlow::ROUTERS{$k} ) {
-	    mkdir("$CUFlow::OUTDIR/" . $CUFlow::ROUTERS{$k},0755);
-	}
-    }
-    
     foreach my $subnet (keys %CUFlow::mysubnetlist) {
         ($subnetdir=$subnet) =~ s/\//_/g;
 	if (! -d "$CUFlow::OUTDIR/" . $subnetdir ) {
 	    mkdir("$CUFlow::OUTDIR/" . $subnetdir,0755);
 	}
     }
+    
+    foreach my $router (keys %CUFlow::myrouterlist) {
+        ($routerdir=$router) =~ s/\//_/g;
+	if (! -d "$CUFlow::OUTDIR/" . $routerdir ) {
+	    mkdir("$CUFlow::OUTDIR/" . $routerdir,0755);
+	}
+    }
 
     # Compute total values
+
     for my $dir ('in','out') {
 	for my $type ('pkts','bytes','flows') {
-	    $i = 0;
-	    for my $exporter (keys %{$self->{exporters}}) {
-		$i += $self->{exporters}{$exporter}{'total'}{$dir}{$type};
+	    $i,$j,$k = 0;
+	    for my $router (keys %CUFlow::myrouterlist) {
+		$i += $CUFlow::myrouterlist{$router}{'total'}{$dir}{$type};
+		$j += $CUFlow::myrouterlist{$router}{'multicast'}{$dir}{$type};
+                #for my $tos (keys %($CUFlow::myrouterlist{$router}{'tos'}) {
+		#    $CUFlow::myalllist{'tos'}{$dir}{$type} = $CUFlow::myrouterlist{$router}{'tos'}{$tos}{$²
+                #}
 	    }
-	    $CUFlow::totals{$dir}{$type} = $i;
+	    $CUFlow::myalllist{'total'}{$dir}{$type} = $i;
+	    $CUFlow::myalllist{'multicast'}{$dir}{$type} = $j;
 	}
     }
     
     # First, always generate a totals report
     # createGeneralRRD we get from our parent, FlowScan
     # Create a new rrd if one doesn't exist
+    @values = ();
+    $file = $CUFlow::OUTDIR . "/total.rrd";
     $self->createGeneralRRD($file,
 			    qw(
 			       ABSOLUTE in_bytes
@@ -698,17 +762,49 @@ sub report {
 
     foreach my $i ('bytes','pkts','flows') {
 	foreach my $j ('in','out') {
-	    push(@values, $CUFlow::totals{$j}{$i});
+	    push(@values, $CUFlow::myalllist{$j}{$i});
+                if (!(defined($tmp = $CUFlow::myalllist{'total'}{$j}{$i}))) {
+                    push(@values, 0);
+                }
+                else {
+                    push(@values, $tmp);
+                }
 	}
     }
     $self->updateRRD($file, @values);
 
+    @values = ();
+    $file = $CUFlow::OUTDIR . "/protocol_multicast.rrd";
+    $self->createGeneralRRD($file,
+                            qw(
+                               ABSOLUTE in_bytes
+                               ABSOLUTE out_bytes
+                               ABSOLUTE in_pkts
+                               ABSOLUTE out_pkts
+                               ABSOLUTE in_flows
+                               ABSOLUTE out_flows
+                               )
+                            ) unless -f $file;
+
+    foreach my $i ('bytes','pkts','flows') {
+        foreach my $j ('in','out') {
+            push(@values, $CUFlow::myalllist{$j}{$i});
+                if (!(defined($tmp = $CUFlow::myalllist{'multicast'}{$j}{$i}))) {
+                    push(@values, 0);
+                }
+                else {
+                    push(@values, $tmp);
+                }
+        }
+    }
+    $self->updateRRD($file, @values);
+
     # Now do totals per-exporter
-    foreach my $exporter (keys %CUFlow::ROUTERS) {
+    foreach my $router (keys %CUFlow::myrouterlist) {
 	@values = ();
-	$routerfile = $CUFlow::OUTDIR . "/" . 
-	    $CUFlow::ROUTERS{$exporter} . "/total.rrd";
-	$self->createGeneralRRD($routerfile,
+	$file = $CUFlow::OUTDIR . "/" . 
+	    $CUFlow::myrouterlist{$router}{'name'} . "/total.rrd";
+	$self->createGeneralRRD($file,
 				qw(
 				   ABSOLUTE in_bytes
 				   ABSOLUTE out_bytes
@@ -717,21 +813,26 @@ sub report {
 				   ABSOLUTE in_flows
 				   ABSOLUTE out_flows
 				   )
-				) unless -f $routerfile; 
+				) unless -f $file; 
 	
 	foreach my $i ('bytes','pkts','flows') {
 	    foreach my $j ('in','out') {
-		$hr = $self->{exporters}{$exporter};
-		push(@values, 0 + $hr->{'total'}{$j}{$i});
+                if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'total'}{$j}{$i}))) {
+                    push(@values, 0);
+                }
+                else {
+                    push(@values, $tmp);
+                }
 	    }
 	}
-	$self->updateRRD($routerfile, @values);
+	$self->updateRRD($file, @values);
     }
 
     # Second, Multicast?
     # createGeneralRRD we get from our parent, FlowScan
     # Create a new rrd if one doesn't exist
     if ($CUFlow::multicast == 1) {
+	@values = ();
 	$file = $CUFlow::OUTDIR . "/protocol_multicast.rrd";
 	$self->createGeneralRRD($file,
 				qw(
@@ -743,25 +844,24 @@ sub report {
 				   ABSOLUTE out_flows
 				   )
 				) unless -f $file; 
-	
-	@values = ();
 	foreach my $i ('bytes','pkts','flows') {
 	    foreach my $j ('in','out') {
-		$count = 0;
-		foreach my $k (keys %{$self->{exporters}}) {
-		    $count += $self->{exporters}{$k}{'multicast'}{$j}{$i};
-		}
-		push(@values,$count);
+		if (!(defined($tmp = $CUFlow::myalllist{'multicast'}{$j}{$i}))) {
+                    push(@values, 0);
+                }
+                else {
+                    push(@values, $tmp);
+                }
 	    }
 	}
 	$self->updateRRD($file, @values);
 
 	# Now do totals per-exporter
-	foreach my $exporter (keys %CUFlow::ROUTERS) {
+	foreach my $router (keys %CUFlow::myrouterlist) {
 	    @values = ();
-	    $routerfile = $CUFlow::OUTDIR . "/" . 
-		$CUFlow::ROUTERS{$exporter} . "/protocol_multicast.rrd";
-	    $self->createGeneralRRD($routerfile,
+	    $file = $CUFlow::OUTDIR . "/" . 
+		$CUFlow::myrouterlist{$router}{'name'} . "/protocol_multicast.rrd";
+	    $self->createGeneralRRD($file,
 				    qw(
 				       ABSOLUTE in_bytes
 				       ABSOLUTE out_bytes
@@ -770,13 +870,16 @@ sub report {
 				       ABSOLUTE in_flows
 				       ABSOLUTE out_flows
 				       )
-				    ) unless -f $routerfile; 
-	    
+				    ) unless -f $file; 
 	    foreach my $i ('bytes','pkts','flows') {
 		foreach my $j ('in','out') {
-		    $hr = $self->{exporters}{$exporter};
-		    push(@values, 0 + $hr->{'multicast'}{$j}{$i});
-		}
+            	   if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'multicast'}{$j}{$i}))) {
+                       push(@values, 0);
+                   }
+                  else {
+                       push(@values, $tmp);
+                   }
+                }
 	    }
 	    $self->updateRRD($routerfile, @values);
 	}
@@ -786,8 +889,6 @@ sub report {
     foreach my $tos (keys %CUFlow::TOS) {
 	@values = ();
 	$file = $CUFlow::OUTDIR . "/tos_" . $tos . ".rrd";
-
-	$hr = $CUFlow::TOS{$tos};
 
 	$self->createGeneralRRD($file,
 				qw(
@@ -799,13 +900,21 @@ sub report {
 				   ABSOLUTE out_flows
 				   )
 				) unless -f $file; 
+           foreach my $i ('bytes','pkts','flows') {
+                foreach my $j ('in','out') {
+                   if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'tos'}{$tos}{$j}{$i}))) {
+                       push(@values, 0);
+                   }
+                  else {
+                       push(@values, $tmp);
+                   }
+                }
 
 	foreach my $type ('bytes','pkts','flows') {
 	    foreach my $dir ('in','out') {
 		    
 		# Sum counter for all TOS values in this label
 		$tmp = 0;
-		foreach my $exporter (keys %{$self->{exporters}}) {
 		    foreach my $current (keys %$hr) {
 
 			$tmp +=
@@ -874,7 +983,6 @@ sub report {
                       }
                    }
                 }
-                print "Service dst Protocol:@values\n";
                 $self->createGeneralRRD($file,
                                 qw(
                                    ABSOLUTE in_bytes
