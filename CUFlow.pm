@@ -599,13 +599,15 @@ sub wanted {
     $hr->{$protocol}{'dst'}{$dstport}{$which}{'bytes'} += $bytes;
     $hr->{$protocol}{'dst'}{$dstport}{$which}{'pkts'}  += $pkts;
 
-    if (defined(%{$CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}})) {
-        $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'flows'}++;
-        $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'bytes'} += $bytes;
-        $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'pkts'} + $pkts;
-#   if (($subnet = $CUFlow::SUBNETS->match_integer($dstaddr)) 
-#	|| ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)))
-#     {
+   if (($subnet = $CUFlow::SUBNETS->match_integer($dstaddr)) 
+	|| ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)))
+     {
+        if (defined($CUFlow::mysubnetlist{$subnet}{$protocol}{'total'})) 
+          {
+          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'flows'}++;
+          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'bytes'} += $bytes;
+          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'pkts'} + $pkts;
+          }
         if (defined $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport})
           {
           $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
@@ -852,7 +854,6 @@ sub report {
 
     foreach my $subnet (keys %CUFlow::mysubnetlist) {
         ($subnetdir=$subnet) =~ s/\//_/g;
-        print "SUBNETDIR:$subnetdir\n";
       	foreach my $protocol (keys %{$CUFlow::mysubnetlist{$subnet}}) {
             #$total=0;
       	    foreach my $srv (keys %{$CUFlow::mysubnetlist{$subnet}{$protocol}}) {
@@ -860,7 +861,6 @@ sub report {
                 if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
 		  $tmp = $srv;
                 }
-                print "Service: $srv\n"; 
 	        $file = $CUFlow::OUTDIR."/". $subnetdir . "/service_" . 
 			$tmp . "_dst.rrd";
 	        @values = ();
@@ -874,6 +874,7 @@ sub report {
                       }
                    }
                 }
+                print "Service dst Protocol:@values\n";
                 $self->createGeneralRRD($file,
                                 qw(
                                    ABSOLUTE in_bytes
@@ -903,6 +904,7 @@ sub report {
                       }
                    }
                 }
+                print "Service src Protocol:@values\n";
                 $self->createGeneralRRD($file,
                                 qw(
                                    ABSOLUTE in_bytes
@@ -930,6 +932,7 @@ sub report {
                   }
                }
             }
+            print "Subnet Protocol:@values\n";
             $self->createGeneralRRD($file,
                              qw(
                                 ABSOLUTE in_bytes
@@ -942,8 +945,8 @@ sub report {
                               ) unless -f $file;
             $self->updateRRD($file, @values);
         }
-	#Subnet Protocol statistics
-        $file = $CUFlow::OUTDIR."/". $subnetdir . "/total.rdd";
+	#Total Protocol statistics
+        $file = $CUFlow::OUTDIR."/". $subnetdir . "/total.rrd";
         @values = ();
         foreach my $i ('bytes','pkts','flows') {
             foreach my $j ('in','out') {
@@ -955,6 +958,7 @@ sub report {
                }
             }
         }
+        print "Total Subnet:@values\n";
         $self->createGeneralRRD($file,
                          qw(
                             ABSOLUTE in_bytes
