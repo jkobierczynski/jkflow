@@ -257,6 +257,8 @@ my(%myservices);
 my(%mysubnetlist);
 my(%myrouterlist);
 my(%myalllist);
+my($which);
+my($subnet);
 my(%PROTOCOLS);			# A hashtable containing protocols we are
 				# interested in. E.g.: 
 				# $PROTOCOLS{6} = 'tcp';
@@ -547,9 +549,7 @@ sub _init {
 # needs to be as fast and as short as possible.
 sub wanted {
     my $self = shift;
-    my $which = '';
     my $hr;
-    my $subnet;
 
     # First, are we inbound or outbound?
     if ($CUFlow::SUBNETS->match_integer($dstaddr)) {
@@ -574,117 +574,75 @@ sub wanted {
         }
     }
 
-    # Multicast handling here, it seems to have nexthop and
-    # outputIf of zero
     if (($dstaddr & $CUFlow::MCAST_MASK) == $CUFlow::MCAST_NET) {
-	# First, are we inbound or outbound?
+        countmulticasts(\%{$CUFlow::myalllist});
 	if ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)) {
 	    $which = 'out';
-            # First update the total counters
-            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'flows'}++;
-            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
-            $CUFlow::mysubnetlist{'multicast'}{'total'}{$which}{'pkts'}  +=$pkts;
+            countmulticasts(\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}});
 	} else {
 	    $which = 'in';
 	}
 	return 1;	
     } 
 
-    #$hr->{bytes} += $bytes;
-    #$hr->{pkts}  += $pkts;
-    #$hr->{flows}++;
-
-    #$hr = $self->{exporters}{$exporterip};
-
-    # First update the total counters
-    #$CUFlow::myalllist{'total'}{$which}{'flows'}++;
-    #$CUFlow::myalllist{'total'}{$which}{'bytes'} += $bytes;
-    #$CUFlow::myalllist{'total'}{$which}{'pkts'}  +=$pkts;
-
-    # Now update TOS counters
-    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'flows'}++;
-    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'bytes'} += $bytes;
-    #$CUFlow::myalllist{'tos'}{$which}{$tos}{'pkts'}  += $pkts;
-
-    # Save stats for every protocol, sort out which to log in sub report()
-    if (defined $CUFlow::myalllist{'protocol'}{$protocol}) 
-      {
-      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
-      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
-      $CUFlow::myalllist{'protocol'}{$protocol}{'total'}{$which}{'pkts'}  += $pkts;
-      }
-
-    # Next update service counters in the same fashion
-    if (defined $CUFlow::myalllist{'service'}{$protocol}{$srcport}) 
-      {
-      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
-      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
-      $CUFlow::myalllist{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'}  += $pkts;
-      }
-    if (defined $CUFlow::myalllist{'service'}{$protocol}{$dstport}) 
-      {
-      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
-      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
-      $CUFlow::myalllist{'service'}{$protocol}{$dstport}{'dst'}{$which}{'pkts'}  += $pkts;
-      }
+   $CUFlow::myalllist{'total'}{$which}{'flows'}++;
+   $CUFlow::myalllist{'total'}{$which}{'bytes'} += $bytes;
+   $CUFlow::myalllist{'total'}{$which}{'pkts'} += $pkts;
+   $CUFlow::myalllist{'tos'}{$tos}{$which}{'flows'}++;
+   $CUFlow::myalllist{'tos'}{$tos}{$which}{'bytes'} += $bytes;
+   $CUFlow::myalllist{'tos'}{$tos}{$which}{'pkts'} += $pkts;
+   countpackets(\%CUFlow::myalllist);
 
    if (defined $CUFlow::myrouterlist{$exporterip}) 
-     {
-          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'flows'}++;
-          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'bytes'} += $bytes;
-          $CUFlow::myrouterlist{$exporterip}{'tos'}{$tos}{'pkts'} + $pkts;
-        if (defined($CUFlow::myrouterlist{$exporterip}{$protocol}{'total'})) 
-          {
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'flows'}++;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'bytes'} += $bytes;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{'total'}{'pkts'} + $pkts;
-          }
-        if (defined $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport})
-          {
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$srcport}{'src'}{$which}{'pkts'} + $pkts;
-          }
-        if (defined $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport})
-          {
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
-          $CUFlow::myrouterlist{$exporterip}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} + $pkts;
-          }
-    }
+      {
+      countpackets(\%{$CUFlow::myrouterlist{'router'}{$exporterip}});
+      countmulticasts(\%{$CUFlow::myrouterlist{'router'}{$exporterip}});
+      }
 
    if (($subnet = $CUFlow::SUBNETS->match_integer($dstaddr)) 
 	|| ($subnet = $CUFlow::SUBNETS->match_integer($srcaddr)))
-     {
-        #if (defined($CUFlow::mysubnetlist{$subnet}{'tos'})) Impliciet aanwezig
-        #  {
-          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'flows'}++;
-          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'bytes'} += $bytes;
-          $CUFlow::mysubnetlist{$subnet}{'tos'}{$tos}{'pkts'} + $pkts;
-        #  }
-        if (defined($CUFlow::mysubnetlist{$subnet}{$protocol}{'total'})) 
-          {
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'flows'}++;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'bytes'} += $bytes;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{'pkts'} + $pkts;
-          }
-        if (defined $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport})
-          {
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$srcport}{'src'}{$which}{'pkts'} + $pkts;
-          }
-        if (defined $CUFlow::mysubnetlist{$subnet}{$protocol}{$dstport})
-          {
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
-          $CUFlow::mysubnetlist{$subnet}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} + $pkts;
-          }
-    }
+      {
+      countpackets(\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}});
+      }
     #use Data::Dumper;
     #print Dumper(%CUFlow::mysubnetlist);
     return 1;
 }
+
+sub countpackets {
+    my $payload = shift;
+    if (defined $payload->{'protocol'}{$protocol}) {
+      $payload->{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
+      $payload->{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
+      $payload->{'protocol'}{$protocol}{'total'}{$which}{'pkts'} += $pkts;
+      $payload->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{'flows'}++;
+      $payload->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{'bytes'} += $bytes;
+      $payload->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{'pkts'} += $pkts;
+    }
+    if (defined $payload->{'service'}{$protocol}{$srcport}) 
+      {
+      $payload->{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
+      $payload->{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
+      $payload->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
+      }
+    if (defined $payload->{'service'}{$protocol}{$dstport}) 
+      {
+      $payload->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
+      $payload->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
+      $payload->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} += $pkts;
+      }
+}
+
+sub countmulticasts {
+    my $payload = shift;
+    $payload->{'multicast'}{'total'}{$which}{'flows'}++;
+    $payload->{'multicast'}{'total'}{$which}{'bytes'} += $bytes;
+    $payload->{'multicast'}{'total'}{$which}{'pkts'} += $pkts;
+    $payload->{'multicast'}{'tos'}{$tos}{$which}{'flows'}++;
+    $payload->{'multicast'}{'tos'}{$tos}{$which}{'bytes'} += $bytes;
+    $payload->{'multicast'}{'tos'}{$tos}{$which}{'pkts'} += $pkts;
+} 
+
 
 sub perfile {
     # Only do this, so we get the filetime from our super-class
@@ -693,6 +651,185 @@ sub perfile {
     $CUFlow::totals = ();	# Clear this out
 
     $self->SUPER::perfile(@_);
+}
+
+sub summarize {
+   my $sumref = shift;
+   my $addref = shift;
+    
+   foreach my $type ('bytes','pkts','flows') {
+      foreach my $which ('in','out') {
+         foreach my $protocol (keys %{$addref->{'protocol'}}) { 
+         	$sumref->{'protocol'}{$protocol}{'total'}{$which}{$type} 
+			+= $addref->{'protocol'}{$protocol}{'total'}{$which}{$type};
+		foreach my $service (keys %{$addref->{'service'}{$protocol}}) {
+         	$sumref->{'service'}{$protocol}{$service}{'src'}{$which}{$type} 
+			+= $addref->{'service'}{$protocol}{$service}{'src'}{$which}{$type};
+         	$sumref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type} 
+			+= $addref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type};
+                }
+         }
+         $sumref->{'multicast'}{'total'}{$which}{$type} 
+		+= $addref->{'multicast'}{'total'}{$which}{$type};
+         foreach my $tos ('normal','other') {
+            foreach my $protocol (keys %{$addref->{'protocol'}}) {
+         	$sumref->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{$type}
+			+= $addref->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{$type};
+            }
+            $sumref->{'multicast'}{'tos'}{$tos}{$which}{$type} 
+ 		+= $addref->{'multicast'}{'tos'}{$tos}{$which}{$type};
+         }
+      }
+   }
+}   
+
+sub reporttorrdfiles {
+    
+    my $self=shift;
+    my $dir=shift;
+    my $reference=shift;
+    my ($file,$tmp);
+    my @values = ();
+
+    # First, always generate a totals report
+    # createGeneralRRD we get from our parent, FlowScan
+    # Create a new rrd if one doesn't exist
+    $file = $CUFlow::OUTDIR . $dir . "/total.rrd";
+    $self->createGeneralRRD($file,
+			    qw(
+			       ABSOLUTE in_bytes
+			       ABSOLUTE out_bytes
+			       ABSOLUTE in_pkts
+			       ABSOLUTE out_pkts
+			       ABSOLUTE in_flows
+			       ABSOLUTE out_flows
+			       )
+			    ) unless -f $file; 
+
+    foreach my $i ('bytes','pkts','flows') {
+	foreach my $j ('in','out') {
+             if (!(defined($tmp = $reference->{'total'}{$j}{$i}))) {
+                  push(@values, 0);
+             }
+             else {
+                  push(@values, $tmp);
+             }
+	}
+    }
+    $self->updateRRD($file, @values);
+    foreach my $tos ('normal','other') {
+    	@values = ();
+    	$file = $CUFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
+    	$self->createGeneralRRD($file,
+        	                    qw(
+                	               ABSOLUTE in_bytes
+                        	       ABSOLUTE out_bytes
+	                               ABSOLUTE in_pkts
+        	                       ABSOLUTE out_pkts
+                	               ABSOLUTE in_flows
+                        	       ABSOLUTE out_flows
+	                               )
+        	                    ) unless -f $file;
+
+	    foreach my $i ('bytes','pkts','flows') {
+	        foreach my $j ('in','out') {
+        	     if (!(defined($tmp = $reference->{'tos'}{$tos}{$j}{$i}))) {
+                	  push(@values, 0);
+	             }
+        	     else {
+                	  push(@values, $tmp);
+             	     }
+                }
+            }
+    	$self->updateRRD($file, @values);
+    }
+    
+    @values = ();
+    $file = $CUFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
+    $self->createGeneralRRD($file,
+                            qw(
+                               ABSOLUTE in_bytes
+                               ABSOLUTE out_bytes
+                               ABSOLUTE in_pkts
+                               ABSOLUTE out_pkts
+                               ABSOLUTE in_flows
+                               ABSOLUTE out_flows
+                               )
+                            ) unless -f $file;
+
+    foreach my $i ('bytes','pkts','flows') {
+        foreach my $j ('in','out') {
+             if (!(defined($tmp = $reference->{'multicast'}{'total'}{$j}{$i}))) {
+                  push(@values, 0);
+             }
+             else {
+                  push(@values, $tmp);
+             }
+        }
+    }
+    $self->updateRRD($file, @values);
+ 
+    foreach my $protocol (keys %{$reference->{'protocol'}}) {
+          if (!($tmp = getprotobynumber($protocol))) {
+	    $tmp = $protocol;
+          }
+          $file = $CUFlow::OUTDIR."/". $dir . "/protocol_" . $tmp . ".rrd";
+          @values = ();
+	  foreach my $i ('bytes','pkts','flows') {
+	        foreach my $j ('in','out') {
+                      if (!(defined($tmp = $reference->{'protocol'}{$protocol}{'total'}{$j}{$i}))) {
+                         push(@values, 0);
+                      }
+                      else {        
+		         push(@values, $tmp);
+                      }
+                   }
+          }
+          $self->createGeneralRRD($file,
+                              qw(
+                              ABSOLUTE in_bytes
+                              ABSOLUTE out_bytes
+                              ABSOLUTE in_pkts
+                              ABSOLUTE out_pkts
+                              ABSOLUTE in_flows
+                              ABSOLUTE out_flows
+                              )
+                            ) unless -f $file;
+	  $self->updateRRD($file, @values);
+    }
+   
+    foreach my $src ('src','dst') { 
+      foreach my $protocol (keys %{$reference->{'service'}}) {
+      	     foreach my $srv (keys %{$reference->{'service'}{$protocol}}) {
+                if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
+		  $tmp = $srv;
+                }
+	        $file = $CUFlow::OUTDIR."/". $dir . "/service_" . $tmp . "_" . $src . ".rrd";
+	        @values = ();
+	        foreach my $i ('bytes','pkts','flows') {
+	           foreach my $j ('in','out') {
+                      if (!(defined($tmp = $reference->{'service'}{$protocol}{$srv}{$src}{$j}{$i}))) {
+                         push(@values, 0);
+                      }
+                      else {        
+		         push(@values, $tmp);
+                      }
+                   }
+                }
+                $self->createGeneralRRD($file,
+                                qw(
+                                   ABSOLUTE in_bytes
+                                   ABSOLUTE out_bytes
+                                   ABSOLUTE in_pkts
+                                   ABSOLUTE out_pkts
+                                   ABSOLUTE in_flows
+                                   ABSOLUTE out_flows
+                                   )
+                                ) unless -f $file;
+	        $self->updateRRD($file, @values);
+             }
+      }
+    }
 }
 
 sub report {
@@ -727,541 +864,30 @@ sub report {
 	}
     }
 
-    # Compute total values
-
-    for my $dir ('in','out') {
-	for my $type ('pkts','bytes','flows') {
-	    $i,$j,$k = 0;
-	    for my $router (keys %CUFlow::myrouterlist) {
-		$i += $CUFlow::myrouterlist{$router}{'total'}{$dir}{$type};
-		$j += $CUFlow::myrouterlist{$router}{'multicast'}{$dir}{$type};
-                #for my $tos (keys %($CUFlow::myrouterlist{$router}{'tos'}) {
-		#    $CUFlow::myalllist{'tos'}{$dir}{$type} = $CUFlow::myrouterlist{$router}{'tos'}{$tos}{$²
-                #}
-	    }
-	    $CUFlow::myalllist{'total'}{$dir}{$type} = $i;
-	    $CUFlow::myalllist{'multicast'}{$dir}{$type} = $j;
-	}
+    for my $router (keys %CUFlow::myrouterlist) {
+      summarize(\%{$CUFlow::myrouterlist{'router'}{$router}},\%CUFlow::myrouterlist);
     }
-    
-    # First, always generate a totals report
-    # createGeneralRRD we get from our parent, FlowScan
-    # Create a new rrd if one doesn't exist
-    @values = ();
-    $file = $CUFlow::OUTDIR . "/total.rrd";
-    $self->createGeneralRRD($file,
-			    qw(
-			       ABSOLUTE in_bytes
-			       ABSOLUTE out_bytes
-			       ABSOLUTE in_pkts
-			       ABSOLUTE out_pkts
-			       ABSOLUTE in_flows
-			       ABSOLUTE out_flows
-			       )
-			    ) unless -f $file; 
-
-    foreach my $i ('bytes','pkts','flows') {
-	foreach my $j ('in','out') {
-	    push(@values, $CUFlow::myalllist{$j}{$i});
-                if (!(defined($tmp = $CUFlow::myalllist{'total'}{$j}{$i}))) {
-                    push(@values, 0);
-                }
-                else {
-                    push(@values, $tmp);
-                }
-	}
+    for my $subnet (keys %CUFlow::mysubnetlist) {
+      summarize(\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}},\%CUFlow::mysubnetlist);
     }
-    $self->updateRRD($file, @values);
-
-    @values = ();
-    $file = $CUFlow::OUTDIR . "/protocol_multicast.rrd";
-    $self->createGeneralRRD($file,
-                            qw(
-                               ABSOLUTE in_bytes
-                               ABSOLUTE out_bytes
-                               ABSOLUTE in_pkts
-                               ABSOLUTE out_pkts
-                               ABSOLUTE in_flows
-                               ABSOLUTE out_flows
-                               )
-                            ) unless -f $file;
-
-    foreach my $i ('bytes','pkts','flows') {
-        foreach my $j ('in','out') {
-            push(@values, $CUFlow::myalllist{$j}{$i});
-                if (!(defined($tmp = $CUFlow::myalllist{'multicast'}{$j}{$i}))) {
-                    push(@values, 0);
-                }
-                else {
-                    push(@values, $tmp);
-                }
-        }
-    }
-    $self->updateRRD($file, @values);
-
-    # Now do totals per-exporter
-    foreach my $router (keys %CUFlow::myrouterlist) {
-	@values = ();
-	$file = $CUFlow::OUTDIR . "/" . 
-	    $CUFlow::myrouterlist{$router}{'name'} . "/total.rrd";
-	$self->createGeneralRRD($file,
-				qw(
-				   ABSOLUTE in_bytes
-				   ABSOLUTE out_bytes
-				   ABSOLUTE in_pkts
-				   ABSOLUTE out_pkts
-				   ABSOLUTE in_flows
-				   ABSOLUTE out_flows
-				   )
-				) unless -f $file; 
 	
-	foreach my $i ('bytes','pkts','flows') {
-	    foreach my $j ('in','out') {
-                if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'total'}{$j}{$i}))) {
-                    push(@values, 0);
-                }
-                else {
-                    push(@values, $tmp);
-                }
-	    }
-	}
-	$self->updateRRD($file, @values);
-    }
-
-    # Second, Multicast?
-    # createGeneralRRD we get from our parent, FlowScan
-    # Create a new rrd if one doesn't exist
-    if ($CUFlow::multicast == 1) {
-	@values = ();
-	$file = $CUFlow::OUTDIR . "/protocol_multicast.rrd";
-	$self->createGeneralRRD($file,
-				qw(
-				   ABSOLUTE in_bytes
-				   ABSOLUTE out_bytes
-				   ABSOLUTE in_pkts
-				   ABSOLUTE out_pkts
-				   ABSOLUTE in_flows
-				   ABSOLUTE out_flows
-				   )
-				) unless -f $file; 
-	foreach my $i ('bytes','pkts','flows') {
-	    foreach my $j ('in','out') {
-		if (!(defined($tmp = $CUFlow::myalllist{'multicast'}{$j}{$i}))) {
-                    push(@values, 0);
-                }
-                else {
-                    push(@values, $tmp);
-                }
-	    }
-	}
-	$self->updateRRD($file, @values);
-
-	# Now do totals per-exporter
-	foreach my $router (keys %CUFlow::myrouterlist) {
-	    @values = ();
-	    $file = $CUFlow::OUTDIR . "/" . 
-		$CUFlow::myrouterlist{$router}{'name'} . "/protocol_multicast.rrd";
-	    $self->createGeneralRRD($file,
-				    qw(
-				       ABSOLUTE in_bytes
-				       ABSOLUTE out_bytes
-				       ABSOLUTE in_pkts
-				       ABSOLUTE out_pkts
-				       ABSOLUTE in_flows
-				       ABSOLUTE out_flows
-				       )
-				    ) unless -f $file; 
-	    foreach my $i ('bytes','pkts','flows') {
-		foreach my $j ('in','out') {
-            	   if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'multicast'}{$j}{$i}))) {
-                       push(@values, 0);
-                   }
-                  else {
-                       push(@values, $tmp);
-                   }
-                }
-	    }
-	    $self->updateRRD($routerfile, @values);
-	}
-    }
-
-    # Next, generate TOS reports. Each label gets one rrd.
-    foreach my $tos (keys %CUFlow::TOS) {
-	@values = ();
-	$file = $CUFlow::OUTDIR . "/tos_" . $tos . ".rrd";
-
-	$self->createGeneralRRD($file,
-				qw(
-				   ABSOLUTE in_bytes
-				   ABSOLUTE out_bytes
-				   ABSOLUTE in_pkts
-				   ABSOLUTE out_pkts
-				   ABSOLUTE in_flows
-				   ABSOLUTE out_flows
-				   )
-				) unless -f $file; 
-           foreach my $i ('bytes','pkts','flows') {
-                foreach my $j ('in','out') {
-                   if (!(defined($tmp = $CUFlow::myrouterlist{$router}{'tos'}{$tos}{$j}{$i}))) {
-                       push(@values, 0);
-                   }
-                  else {
-                       push(@values, $tmp);
-                   }
-                }
-
-	foreach my $type ('bytes','pkts','flows') {
-	    foreach my $dir ('in','out') {
-		    
-		# Sum counter for all TOS values in this label
-		$tmp = 0;
-		    foreach my $current (keys %$hr) {
-
-			$tmp +=
-		    $self->{exporters}{$exporter}{tos}{$dir}{$current}{$type};
-			
-		    }
-		}		
-		push(@values,$tmp);
-	    }
-	}
-        $self->updateRRD($file, @values);
-    
-	# Now do the same thing for each exporter.
-	foreach my $exporter (keys %CUFlow::ROUTERS) {
-	    @values = ();
-	    $routerfile = $CUFlow::OUTDIR . "/" . 
-		$CUFlow::ROUTERS{$exporter} . 
-		    "/tos_" . $tos . ".rrd";
-
-	    $self->createGeneralRRD($routerfile,
-				    qw(
-				       ABSOLUTE in_bytes
-				       ABSOLUTE out_bytes
-				       ABSOLUTE in_pkts
-				       ABSOLUTE out_pkts
-				       ABSOLUTE in_flows
-				       ABSOLUTE out_flows
-				       )
-				    ) unless -f $routerfile; 
-
-	    foreach my $type ('bytes','pkts','flows') {
-		foreach my $dir ('in','out') {
-		    # Sum counter for all services in this label
-		    $tmp = 0;
-
-		    foreach my $current (keys %$hr) {
-			$tmp += 
-	    $self->{exporters}{$exporter}{tos}{$dir}{$current}{$type};
-		    }
-		    push(@values,$tmp);
-		}
-	    }
-	    $self->updateRRD($routerfile, @values);
-	}	
+    reporttorrdfiles("",\%{$CUFlow::myalllist});
+    reporttorrdfiles("routertotal",\%{$CUFlow::myrouterlist});
+    reporttorrdfiles("subnettotal",\%{$CUFlow::mysubnetlist});
+    foreach my $router (keys %CUFlow::myrouterlist) {
+    	reporttorrdfiles($CUFlow::myrouterlist{'router'}{$router}{'name'},\%{$CUFlow::myrouterlist{'router'}{$router}});
     }
 
     foreach my $subnet (keys %CUFlow::mysubnetlist) {
         ($subnetdir=$subnet) =~ s/\//_/g;
-      	foreach my $protocol (keys %{$CUFlow::mysubnetlist{$subnet}}) {
-            #$total=0;
-      	    foreach my $srv (keys %{$CUFlow::mysubnetlist{$subnet}{$protocol}}) {
-		# Do the dst rrds
-                if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-		  $tmp = $srv;
-                }
-	        $file = $CUFlow::OUTDIR."/". $subnetdir . "/service_" . 
-			$tmp . "_dst.rrd";
-	        @values = ();
-	        foreach my $i ('bytes','pkts','flows') {
-	           foreach my $j ('in','out') {
-                      if (!(defined($tmp = $CUFlow::mysubnetlist{$subnet}{$protocol}{$srv}{'dst'}{$j}{$i}))) {
-                         push(@values, 0);
-                      }
-                      else {        
-		         push(@values, $tmp);
-                      }
-                   }
-                }
-                $self->createGeneralRRD($file,
-                                qw(
-                                   ABSOLUTE in_bytes
-                                   ABSOLUTE out_bytes
-                                   ABSOLUTE in_pkts
-                                   ABSOLUTE out_pkts
-                                   ABSOLUTE in_flows
-                                   ABSOLUTE out_flows
-                                   )
-                                ) unless -f $file;
-	        $self->updateRRD($file, @values);
-
-		# Do the src rrds
-                if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-		  $tmp = $srv;
-                }
-                $file = $CUFlow::OUTDIR."/". $subnetdir . "/service_" .
-                        $tmp . "_src.rrd";
-                @values = ();
-                foreach my $i ('bytes','pkts','flows') {
-                   foreach my $j ('in','out') {
-                      if (!(defined($tmp = $CUFlow::mysubnetlist{$subnet}{$protocol}{$srv}{'src'}{$j}{$i}))) {
-                         push(@values, 0);
-                      }
-                      else {
-                         push(@values, $tmp);
-                      }
-                   }
-                }
-                print "Service src Protocol:@values\n";
-                $self->createGeneralRRD($file,
-                                qw(
-                                   ABSOLUTE in_bytes
-                                   ABSOLUTE out_bytes
-                                   ABSOLUTE in_pkts
-                                   ABSOLUTE out_pkts
-                                   ABSOLUTE in_flows
-                                   ABSOLUTE out_flows
-                                   )
-                                ) unless -f $file;
-                $self->updateRRD($file, @values);
-            }
-
-	    #Subnet Protocol statistics
-            $file = $CUFlow::OUTDIR."/". $subnetdir . "/protocol_" .
-                      getprotobynumber($protocol) . ".rrd";
-            @values = ();
-            foreach my $i ('bytes','pkts','flows') {
-               foreach my $j ('in','out') {
-                  if (!(defined($tmp = $CUFlow::mysubnetlist{$subnet}{$protocol}{'total'}{$j}{$i}))) {
-                      push(@values, 0);
-                  }
-                  else {
-                      push(@values, $tmp);
-                  }
-               }
-            }
-            print "Subnet Protocol:@values\n";
-            $self->createGeneralRRD($file,
-                             qw(
-                                ABSOLUTE in_bytes
-                                ABSOLUTE out_bytes
-                                ABSOLUTE in_pkts
-                                ABSOLUTE out_pkts
-                                ABSOLUTE in_flows
-                                ABSOLUTE out_flows
-                                )
-                              ) unless -f $file;
-            $self->updateRRD($file, @values);
-        }
-	#Total Protocol statistics
-        $file = $CUFlow::OUTDIR."/". $subnetdir . "/total.rrd";
-        @values = ();
-        foreach my $i ('bytes','pkts','flows') {
-            foreach my $j ('in','out') {
-               if (!(defined($tmp = $CUFlow::mysubnetlist{$subnet}{'total'}{$j}{$i}))) {
-                   push(@values, 0);
-               }
-               else {
-                   push(@values, $tmp);
-               }
-            }
-        }
-        print "Total Subnet:@values\n";
-        $self->createGeneralRRD($file,
-                         qw(
-                            ABSOLUTE in_bytes
-                            ABSOLUTE out_bytes
-                            ABSOLUTE in_pkts
-                            ABSOLUTE out_pkts
-                            ABSOLUTE in_flows
-                            ABSOLUTE out_flows
-                            )
-                          ) unless -f $file;
-        $self->updateRRD($file, @values);
+    	reporttorrdfiles($subnetdir,\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}});
     }
 
-    # Next, see if we need to generate any per-protocol reports
-    # Each protocol gets one rrd.
-    foreach my $proto (keys %CUFlow::PROTOCOLS) {	
-	@values = ();
-	$file = $CUFlow::OUTDIR . "/protocol_" . 
-	    $CUFlow::PROTOCOLS{$proto} . ".rrd";
-
-	$self->createGeneralRRD($file,
-				qw(
-				   ABSOLUTE in_bytes
-				   ABSOLUTE out_bytes
-				   ABSOLUTE in_pkts
-				   ABSOLUTE out_pkts
-				   ABSOLUTE in_flows
-				   ABSOLUTE out_flows
-				   )
-				) unless -f $file; 
-	
-	foreach my $i ('bytes','pkts','flows') {
-	    foreach my $j ('in','out') {
-		$count = 0;
-		foreach my $k (keys %{$self->{exporters}}) {
-		    $hr = $self->{exporters}{$k};
-		    $count += $hr->{$proto}{'total'}{$j}{$i};
-		}
-		push(@values, $count);
-	    }
-	}
-	$self->updateRRD($file, @values);
-
-	# Now do totals per-exporter
-	foreach my $exporter (keys %CUFlow::ROUTERS) {
-	    @values = ();
-	    $routerfile = $CUFlow::OUTDIR . "/" . 
-		$CUFlow::ROUTERS{$exporter} . "/protocol_" . 
-		    $CUFlow::PROTOCOLS{$proto} . ".rrd";
-	    $self->createGeneralRRD($routerfile,
-				    qw(
-				       ABSOLUTE in_bytes
-				       ABSOLUTE out_bytes
-				       ABSOLUTE in_pkts
-				       ABSOLUTE out_pkts
-				       ABSOLUTE in_flows
-				       ABSOLUTE out_flows
-				       )
-				    ) unless -f $routerfile; 
-	    
-	    foreach my $i ('bytes','pkts','flows') {
-		foreach my $j ('in','out') {
-		    $hr = $self->{exporters}{$exporter};
-		    push(@values, 0 + $hr->{$proto}{'total'}{$j}{$i});
-		}
-	    }
-	    $self->updateRRD($routerfile, @values);
-	}
-    }
-
-    # Next, see which services require rrd files. Each one gets 2 files,
-    # one for src port traffic, one for dst port traffic
-    foreach my $label (keys %CUFlow::SERVICES) {
-	$hr = $CUFlow::SERVICES{$label};
-	foreach my $direction ('src','dst') {
-	    @values = ();
-
-	    $file = $CUFlow::OUTDIR . "/service_$label" .  "_$direction.rrd";
-
-	    # createGeneralRRD we get from our parent, FlowScan
-	    # Create a new rrd if one doesn't exist
-	    $self->createGeneralRRD($file,
-				    qw(
-				       ABSOLUTE in_bytes
-				       ABSOLUTE out_bytes
-				       ABSOLUTE in_pkts
-				       ABSOLUTE out_pkts
-				       ABSOLUTE in_flows
-				       ABSOLUTE out_flows
-				       )
-				    ) unless -f $file; 
-	    foreach my $type ('bytes','pkts','flows') {
-		foreach my $dir ('in','out') {
-		    
-		    # Sum counter for all services in this label
-		    $tmp = 0;
-		    foreach my $exporter (keys %{$self->{exporters}}) {
-			
-			foreach my $proto (keys %$hr) {
-			    foreach my $service (keys %{ $hr->{$proto} }) {
-				
-				# This is the worst thing ever.
-				$tmp += 
-    $self->{exporters}{$exporter}{$proto}{$direction}{$service}{$dir}{$type};
-			    }
-			}
-		    }
-		    push(@values,$tmp);
-		}
-	    }
-
-	    $self->updateRRD($file, @values);
-
-	    # Now do the same thing for each exporter.
-	    foreach my $exporter (keys %CUFlow::ROUTERS) {
-		@values = ();
-		$routerfile = $CUFlow::OUTDIR . "/" . 
-		    $CUFlow::ROUTERS{$exporter} . 
-			"/service_$label" .
-			    "_$direction.rrd";
-		$self->createGeneralRRD($routerfile,
-					qw(
-					   ABSOLUTE in_bytes
-					   ABSOLUTE out_bytes
-					   ABSOLUTE in_pkts
-					   ABSOLUTE out_pkts
-					   ABSOLUTE in_flows
-					   ABSOLUTE out_flows
-					   )
-					) unless -f $routerfile; 
-		foreach my $type ('bytes','pkts','flows') {
-		    foreach my $dir ('in','out') {
-			# Sum counter for all services in this label
-			$tmp = 0;
-			foreach my $proto (keys %$hr) {
-			    foreach my $service (keys %{ $hr->{$proto} }) {
-				
-				# This is the worst thing ever also.
-				$tmp += 
-   $self->{exporters}{$exporter}{$proto}{$direction}{$service}{$dir}{$type};
-			    }
-			}
-			push(@values,$tmp);
-		    }
-		}
-		$self->updateRRD($routerfile, @values);
-	    }
-	}
-    }
-	
     # Should we do scoreboarding?
     if ($CUFlow::scorekeep > 0) {
 	# Yes.
 	$self->scoreboard();
     }
-
-    # Per-network reporting?
-    #
-    # You need to iterate over all the IP's for each Network group because
-    # You may have some IP's that match more than 1 network statement
-    foreach my $label (keys %CUFlow::NETWORKS) {
-	@values = ();
-	$tmp = $CUFlow::NETWORKS{$label};
-	$file = $CUFlow::OUTDIR . "/network_" . "$label.rrd";
-
-	$self->createGeneralRRD($file,
-				qw(
-				   ABSOLUTE in_bytes
-				   ABSOLUTE in_pkts
-				   ABSOLUTE in_flows
-				   ABSOLUTE out_bytes
-				   ABSOLUTE out_pkts
-				   ABSOLUTE out_flows
-				   )
-				) unless -f $file; 
-	
-	foreach my $dir ('in','out') {
-	    @array = ();
-	    $self->{$dir . "iplog"}->climb(sub {push(@array, $_[0]) if
-						    $tmp->match_string(
-							       $_[0]->{addr}) 
-						    } );
-	    foreach my $type ('bytes','pkts','flows') {
-		$i = 0;
-		foreach my $ip (@array) {
-		    $i += $ip->{$type};
-		}
-		push(@values,$i);
-	    }
-	}
-	
-	$self->updateRRD($file, @values);	
-    }
-
-    exit 0;			# We forked, no returning.
 }
 
 # Lifted totally and shamelessly from CampusIO.pm
