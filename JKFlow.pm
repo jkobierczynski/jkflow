@@ -289,16 +289,13 @@ sub parseConfig {
 
 	$JKFlow::OUTDIR = $config->{outputdir};
 
-	use Data::Dumper;
-	print Dumper($config)."\n";
-
 	if (defined $config->{router}{total_router}) {
 		$JKFlow::mylist{'total_router'} = {};
 	}		
 	foreach my $router (keys %{$config->{routers}{router}}) {
 		my $routerip = $config->{routers}{router}{$router}{ipaddress};
-		$config->{routers}{router}{$router}{name} = $router;
-		foreach my $application (keys %{$config->{routers}{router}{$routerip}{application}{service}}) {
+		$JKFlow::mylist{'router'}{$routerip}{'name'} = $router;
+		foreach my $application (keys %{$config->{routers}{router}{$router}{application}{service}}) {
 			pushServices(
 				$config->{routers}{router}{$router}{application}{service}{$application}{content},
 				\%{$JKFlow::mylist{'router'}{$routerip}{'application'}{$application}});
@@ -321,6 +318,7 @@ sub parseConfig {
 		$JKFlow::mylist{'total_subnet'} = {};
 	}		
 	foreach my $subnet (keys %{$config->{subnets}{subnet}}) {
+		$JKFlow::SUBNETS->add_string($subnet);
 		foreach my $application (keys %{$config->{subnets}{subnet}{$subnet}{application}{service}}) {
 			pushServices(
 				$config->{subnets}{subnet}{$subnet}{application}{service}{$application}{content},
@@ -366,6 +364,8 @@ sub parseConfig {
 		}
 	}	
 
+	use Data::Dumper;
+	print Dumper(%JKFlow::mylist)."\n";
 
 
 #    open(FH,$file) || die "Could not open $file ($!)\n";
@@ -701,7 +701,7 @@ sub wanted {
     } 
    countpackets(\%JKFlow::mylist);
 
-   if (defined $JKFlow::mylist{$exporterip}) 
+   if (defined $JKFlow::mylist{'router'}{$exporterip}) 
       {
       countpackets(\%{$JKFlow::mylist{'router'}{$exporterip}});
       countmulticasts(\%{$JKFlow::mylist{'router'}{$exporterip}});
@@ -848,6 +848,7 @@ sub reporttorrdfiles {
 	}
     }
     $self->updateRRD($file, @values);
+    print "File: $file @values\n";
     foreach my $tos ('normal','other') {
     	@values = ();
     	$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
@@ -874,6 +875,7 @@ sub reporttorrdfiles {
                 }
             }
     	$self->updateRRD($file, @values);
+    	print "File: $file @values\n";
     }
     
     @values = ();
@@ -901,6 +903,7 @@ sub reporttorrdfiles {
         }
     }
     $self->updateRRD($file, @values);
+    print "File: $file @values\n";
  
     foreach my $protocol (keys %{$reference->{'protocol'}}) {
           if (!($tmp = getprotobynumber($protocol))) {
@@ -930,6 +933,7 @@ sub reporttorrdfiles {
                               )
                             ) unless -f $file;
 	  $self->updateRRD($file, @values);
+	  print "File: $file @values\n";
     }
    
     foreach my $src ('src','dst') { 
@@ -962,25 +966,30 @@ sub reporttorrdfiles {
                                    )
                                 ) unless -f $file;
 	        $self->updateRRD($file, @values);
+		print "File: $file @values\n";
              }
       }
     }
 }
 
 sub report {
-    my $self = shift;
-    my($file) = $JKFlow::OUTDIR . "/total.rrd";
-    my($routerfile);
-    my(@values) = ();
-    my(@array);
-    my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
+	my $self = shift;
+	my($file) = $JKFlow::OUTDIR . "/total.rrd";
+	my($routerfile);
+	my(@values) = ();
+	my(@array);
+	my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
 
-    foreach my $router (keys %{$JKFlow::mylist{'total_router'}{'router'}}) {
-      summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}});
-    }
-    foreach my $subnet (keys %{$JKFlow::mylist{'total_subnet'}{'subnet'}}) {
-      summarize(\%{$JKFlow::mylist{'total_subnet'}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
-    }
+	if (defined $JKFlow::mylist{'total_router'}) {
+		foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
+			summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}});
+		}
+	}
+	if (defined $JKFlow::mylist{'total_subnet'}) {
+		foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
+			summarize(\%{$JKFlow::mylist{'total_subnet'}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
+		}
+	}
 
     foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
     	foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
@@ -1008,7 +1017,7 @@ sub report {
     reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}});
 
     foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-        ($routerdir=$JKFlow::mylist{$router}{'name'}) =~ s/\//_/g;
+        ($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
         print "Router:$router , Routerdir:$routerdir \n";
 	if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
 	    mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
