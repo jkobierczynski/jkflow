@@ -95,6 +95,7 @@ my(%myalllist);
 my($subnet);
 
 my($OUTDIR) = '.';		# The directory we will stow rrd files in
+my($flowrate) = 1;
 
 $JKFlow::multicast = 0;		# Do multicast? Default no.
 
@@ -113,7 +114,7 @@ sub parseConfig {
 
 	use XML::Simple;
 	my $config=XMLin('/usr/local/bin/JKFlow.xml',
-		forcearray=>['router','subnet','network','direction','application']);
+		forcearray=>['router','interface','subnet','network','direction','application']);
 
 	$JKFlow::OUTDIR = $config->{outputdir};
 
@@ -125,42 +126,14 @@ sub parseConfig {
 				$JKFlow::mylist{'all'}{'localsubnets'}->add_string($subnet);
 			}
 		}
-		pushServices(
-			$config->{all}{services},
-			\%{$JKFlow::mylist{'all'}{'service'}});
-		pushProtocols(
-			$config->{all}{protocols},
-			\%{$JKFlow::mylist{'all'}{'protocol'}});
-		if (defined $config->{all}{direction}) { 
-			$JKFlow::mylist{'all'}{'direction'}={};
-			pushDirections(
-				$config->{all}{direction},
-				\%{$JKFlow::mylist{'all'}{'direction'}});
+		if (defined $config->{all}{samplerate}) {
+			$JKFlow::mylist{all}{samplerate}=$config->{all}{samplerate};
+		} else {
+			$JKFlow::mylist{all}{samplerate}=1;
 		}
-		if (defined $config->{all}{application}) { 
-			$JKFlow::mylist{'all'}{'application'}={};
-			pushApplications( 
-				$config->{all}{application},
-				\%{$JKFlow::mylist{'all'}{'application'}});
-		}
-		if (defined $config->{all}{ftp}) {
-			$JKFlow::mylist{'all'}{'ftp'}={};
-		}
-		if (defined $config->{all}{multicast}) {
-			$JKFlow::mylist{'all'}{'multicast'}={};
-		}
-		if (defined $config->{all}{tos}) {
-			$JKFlow::mylist{'all'}{'tos'}={};
-		}
-		if (defined $config->{all}{total}) {
-			$JKFlow::mylist{'all'}{'total'}={};
-		}
-		if (defined $config->{all}{write}) {
-			$JKFlow::mylist{'all'}{'write'}=$config->{all}{write};
- 		} else {
-			$JKFlow::mylist{'all'}{'write'}="yes";
-		}
-
+		parseDirection (
+			\%{$config->{all}},
+			\%{$JKFlow::mylist{all}});
 	}
 
 	#use Data::Dumper;
@@ -177,41 +150,32 @@ sub parseConfig {
 			print "Routers: router $routername + routerip $router\n";
 			$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
 		}
-		pushServices(
-			$config->{routers}{router}{$routername}{services},
-			\%{$JKFlow::mylist{'router'}{$routername}{'service'}});
-		pushProtocols(
-			$config->{routers}{router}{$routername}{protocols},
-			\%{$JKFlow::mylist{'router'}{$routername}{'protocol'}});
-		if (defined $config->{routers}{router}{$routername}{direction}) { 
-			$JKFlow::mylist{'router'}{$routername}{'direction'}={};
-			pushDirections(
-				$config->{routers}{router}{$routername}{direction},
-				\%{$JKFlow::mylist{'router'}{$routername}{'direction'}});
+		if (defined $config->{routers}{router}{$routername}{interface}) {
+			foreach my $interfacecode (keys %{$config->{routers}{router}{$routername}{interface}}) {
+				print "Routers: router $routername + interface $interfacecode\n";
+				if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{description}) {
+					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{description}=$config->{routers}{router}{$routername}{interface}{$interfacecode}{description};
+				}
+				if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{samplerate}) {
+					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=$config->{'router'}{$routername}{interface}{$interfacecode}{samplerate};
+				} else {
+					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=1;
+				}
+				parseDirection (
+					\%{$config->{routers}{router}{$routername}{interface}{$interfacecode}},
+					\%{$JKFlow::mylist{router}{$routername}{interface}{$interfacecode}});
+			}
 		}
-		if (defined $config->{routers}{router}{$routername}{application}) { 
-			$JKFlow::mylist{'router'}{$routername}{'application'}={};
-			pushApplications( 
-				$config->{routers}{router}{$routername}{application},
-				\%{$JKFlow::mylist{'router'}{$routername}{'application'}});
+
+		if (defined $config->{routers}{router}{$routername}{samplerate}) {
+			$JKFlow::mylist{router}{$routername}{samplerate}=$config->{routers}{router}{$routername}{samplerate};
+		} else {
+			$JKFlow::mylist{router}{$routername}{samplerate}=1;
 		}
-		if (defined $config->{routers}{router}{$routername}{ftp}) {
-			$JKFlow::mylist{'router'}{$routername}{'ftp'}={};
-		}
-		if (defined $config->{routers}{router}{$routername}{multicast}) {
-			$JKFlow::mylist{'router'}{$routername}{'multicast'}={};
-		}
-		if (defined $config->{routers}{router}{$routername}{tos}) {
-			$JKFlow::mylist{'router'}{$routername}{'tos'}={};
-		}
-		if (defined $config->{routers}{router}{$routername}{total}) {
-			$JKFlow::mylist{'router'}{$routername}{'total'}={};
-		}
-		if (defined $config->{routers}{router}{$routername}{write}) {
-			$JKFlow::mylist{'router'}{$routername}{'write'}=$config->{routers}{router}{$routername}{write};
- 		} else {
-			$JKFlow::mylist{'router'}{$routername}{'write'}='yes';
-		}
+		parseDirection (
+			\%{$config->{routers}{router}{$routername}},
+			\%{$JKFlow::mylist{router}{$routername}});
+			
 	}
 
 	foreach my $subnetname (keys %{$config->{subnets}{subnet}}) {
@@ -229,42 +193,15 @@ sub parseConfig {
 			${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->add_string($subnet);
 			$JKFlow::SUBNETS->add_string($subnet);
 		}
-
-		pushServices(
-			$config->{subnets}{subnet}{$subnetname}{services},
-			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'service'}});
-		pushProtocols(
-			$config->{subnets}{subnet}{$subnetname}{protocols},
-			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'protocol'}});
-		if (defined $config->{subnets}{subnet}{$subnetname}{direction}) { 
-			$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}={};
-			pushDirections(
-				$config->{subnets}{subnet}{$subnetname}{direction},
-				\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}});
+		if (defined $config->{subnets}{subnet}{$subnetname}{samplerate}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'samplerate'}=$config->{subnets}{subnet}{$subnetname}{samplerate};
+		} else {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'samplerate'}=1;
 		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{application}) { 
-			$JKFlow::mylist{'subnet'}{$subnetname}{'application'}={};
-			pushApplications( 
-				$config->{subnets}{subnet}{$subnetname}{application},
-				\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}});
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{ftp}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'ftp'}={};
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{multicast}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'multicast'}={};
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{tos}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'tos'}={};
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{total}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'total'}={};
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{write}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'write'}=$config->{subnets}{subnet}{$subnetname}{write};
- 		} else {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'write'}="yes";
-		}
+		
+		parseDirection (
+			\%{$config->{subnets}{subnet}{$subnetname}},
+			\%{$JKFlow::mylist{subnet}{$subnetname}});
 	}
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
@@ -289,7 +226,6 @@ sub parseConfig {
 
 	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
 	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
-
 	
 	if (defined $config->{router}{total_router}) {
 		$JKFlow::mylist{'total_router'} = {};
@@ -300,6 +236,48 @@ sub parseConfig {
 	#use Data::Dumper;
 	#print "Data:".Dumper($JKFlow::mylist{subnets})."\n";
 	#print "Data:".Dumper($config)."\n";
+}
+
+sub parseDirection {
+my $refxml=shift;
+my $ref=shift;
+
+		pushServices(
+			$refxml->{services},
+			\%{$ref->{service}});
+		pushProtocols(
+			$refxml->{protocols},
+			\%{$ref->{protocol}});
+		if (defined $refxml->{direction}) { 
+			$ref->{direction}={};
+			pushDirections(
+				$refxml->{direction},
+				\%{$ref->{direction}});
+
+		}
+		if (defined $refxml->{application}) { 
+			$ref->{application}={};
+			pushApplications( 
+				$refxml->{application},
+				\%{$ref->{application}});
+		}
+		if (defined $refxml->{ftp}) {
+			$ref->{ftp}={};
+		}
+		if (defined $refxml->{multicast}) {
+			$ref->{multicast}={};
+		}
+		if (defined $refxml->{tos}) {
+			$ref->{tos}={};
+		}
+		if (defined $refxml->{total}) {
+			$ref->{total}={};
+		}
+		if (defined $refxml->{write}) {
+			$ref->{write}=$refxml->{write};
+ 		} else {
+			$ref->{write}="yes";
+		}
 }
 
 sub pushProtocols {
@@ -396,6 +374,12 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 	foreach my $direction (keys %{$refxml}) {
 		print "Adding direction $direction\n";
 		$ref->{$direction}{name}=$direction;
+
+		if (defined $refxml->{$direction}{'samplerate'}) {
+			$ref->{$direction}{'samplerate'}=$refxml->{$direction}{'samplerate'};
+		} else {
+			$ref->{$direction}{'samplerate'}=1;
+		}
 		
 		if (defined $refxml->{$direction}{'fromsubnets'}) {
 			${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
@@ -575,6 +559,17 @@ sub wanted {
 			} 
 		}
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
+			#Added Interfaces monitoring
+			if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}) {
+				countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}},'out');
+				countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'application'}},'out');
+				#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'direction'}},'out');
+			} 
+			if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}) {
+				countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}},'in');
+				countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'application'}},'in');
+				#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'direction'}},'in');
+			}
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
 			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
@@ -675,7 +670,7 @@ sub countDirections2 {
 							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
 							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
 								if ($direction->{ref}{monitor} eq "Yes") {
-									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
+									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet.", EXPORTER = ".$exporter. "\n"; 
 								}
 								countpackets (\%{$direction->{ref}},'out');
 								countApplications (\%{$direction->{ref}{application}},'out');
@@ -703,7 +698,7 @@ sub countDirections2 {
 							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
 							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
 								if ($direction->{ref}{monitor} eq "Yes") {
-									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
+									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = ".$srcsubnet.", EXPORTER = ".$exporter. "\n"; 
 								}
                         					countpackets (\%{$direction->{ref}},'in');
                         					countApplications (\%{$direction->{ref}{application}},'in');
@@ -843,6 +838,7 @@ sub perfile {
 sub summarize {
    my $sumref = shift;
    my $addref = shift;
+   my $samplerate = shift;
    my $typeos;
 
    foreach my $type ('bytes','pkts','flows') {
@@ -850,7 +846,7 @@ sub summarize {
 		if (defined $addref->{'protocol'}) {
 			foreach my $protocol (keys %{$addref->{'protocol'}}) { 
 				$sumref->{'protocol'}{$protocol}{'total'}{$which}{$type} 
-					+= $addref->{'protocol'}{$protocol}{'total'}{$which}{$type};
+					+= $addref->{'protocol'}{$protocol}{'total'}{$which}{$type}*$samplerate;
 			}
 		}
 
@@ -858,26 +854,26 @@ sub summarize {
 			foreach my $protocol (keys %{$addref->{'service'}}) { 
 				foreach my $service (keys %{$addref->{'service'}{$protocol}}) {
 					$sumref->{'service'}{$protocol}{$service}{'src'}{$which}{$type} 
-						+= $addref->{'service'}{$protocol}{$service}{'src'}{$which}{$type};
+						+= $addref->{'service'}{$protocol}{$service}{'src'}{$which}{$type}*$samplerate;
 					$sumref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type} 
-						+= $addref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type};
+						+= $addref->{'service'}{$protocol}{$service}{'dst'}{$which}{$type}*$samplerate;
 				}
 			}
 		}
 
 		if (defined $addref->{'multicast'}) {
          		$sumref->{'multicast'}{'total'}{$which}{$type} 
-				+= $addref->{'multicast'}{'total'}{$which}{$type};
+				+= $addref->{'multicast'}{'total'}{$which}{$type}*$samplerate;
 		}
 		if (defined $addref->{'tos'}) {
 			foreach my $typeos ('normal','other') {
 			$sumref->{'tos'}{$typeos}{$which}{$type}
-				+= $addref->{'tos'}{$typeos}{$which}{$type};
+				+= $addref->{'tos'}{$typeos}{$which}{$type}*$samplerate;
 			}
 		}
 		if (defined $addref->{'total'}) {
 			$sumref->{'total'}{$which}{$type} 
-				+= $addref->{'total'}{$which}{$type};
+				+= $addref->{'total'}{$which}{$type}*$samplerate;
 		}
       }
    }
@@ -889,6 +885,7 @@ sub reporttorrd {
 	my $self=shift;
 	my $file=shift;
 	my $ref=shift;
+	my $samplerate=shift;
 	my $tmp;
 	my @values = ();
 
@@ -911,7 +908,7 @@ sub reporttorrd {
 			if (!(defined($tmp = $ref->{$j}{$i}))) {
 				push(@values, 0);
 			} else {
-				push(@values, $tmp);
+				push(@values, $tmp * $samplerate);
 				$ref->{$j}{$i}=0;
 			}
 		}
@@ -926,6 +923,7 @@ sub reporttorrdfiles {
 	my $self=shift;
 	my $dir=shift;
 	my $ref=shift;
+	my $samplerate=shift;
 	my ($file,$tmp);
 
 	# First, always generate a totals report
@@ -933,19 +931,19 @@ sub reporttorrdfiles {
  	# Create a new rrd if one doesn't exist
 	if (defined $ref->{'total'}) {	
 		$file = $JKFlow::OUTDIR . $dir . "/total.rrd";
-		reporttorrd($self,$file,\%{$ref->{'total'}});
+		reporttorrd($self,$file,\%{$ref->{'total'}},$samplerate);
 	}
 
 	if (defined $ref->{'tos'}) {	
 		foreach my $tos ('normal','other') {
 			$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}});
+			reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}},$samplerate);
  		}
 	}
 
 	if (defined $ref->{'multicast'}) {	
 		$file = $JKFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
-		reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}});
+		reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}},$samplerate);
 	}
 
 	if (defined $ref->{'protocol'}) {	
@@ -954,7 +952,7 @@ sub reporttorrdfiles {
 				$tmp = $protocol;
 			}
 			$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}});
+			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
 		}
 	}
 
@@ -966,7 +964,7 @@ sub reporttorrdfiles {
 						$tmp = $srv;
 					}
 					$file = $JKFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
-					reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}});
+					reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}},$samplerate);
 				}
 			}
 		}
@@ -976,7 +974,7 @@ sub reporttorrdfiles {
 		foreach my $src ('src','dst') { 
 			foreach my $application (keys %{$ref->{'application'}}) {
   	     			$file = $JKFlow::OUTDIR. $dir . "/service_" . $application . "_" . $src . ".rrd";
-				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}});
+				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}},$samplerate);
 			}
 		}
 	}
@@ -984,7 +982,7 @@ sub reporttorrdfiles {
 	if (defined $ref->{'ftp'}) {	
 		foreach my $src ('src','dst') { 
   	     		$file = $JKFlow::OUTDIR. $dir . "/service_ftp_" . $src . ".rrd";
-			reporttorrd($self,$file,\%{$ref->{'ftp'}{$src}});
+			reporttorrd($self,$file,\%{$ref->{'ftp'}{$src}},$samplerate);
 		}
 		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
 			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 2*60*60 ||
@@ -1000,7 +998,7 @@ sub reporttorrdfiles {
 			if (! -d $JKFlow::OUTDIR . $dir."/".$direction ) {
 				mkdir($JKFlow::OUTDIR . $dir . "/" . $direction ,0755);
 			}
-			reporttorrdfiles($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}});
+			reporttorrdfiles($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}},$ref->{'direction'}{$direction}{'samplerate'});
 		}
 	}
 }
@@ -1012,26 +1010,27 @@ sub report {
 	my(@values) = ();
 	my(@array);
 	my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
+	my $interf_name;
 
 	if (defined $JKFlow::mylist{'total_router'}) {
 		foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-			summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}});
+			summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
 		}
 	}
 	if (defined $JKFlow::mylist{'total_subnet'}) {
 		foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
-			summarize(\%{$JKFlow::mylist{'total_subnet'}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
+			summarize(\%{$JKFlow::mylist{'total_subnet'}},\%{$JKFlow::mylist{'subnet'}{$subnet}},1);
 		}
 	}
 
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
  		foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
 			print "Summarize $network, $router \n";
-			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}});
+			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
 		}
 		foreach my $subnet (keys %{$JKFlow::mylist{'network'}{$network}{'subnet'}}) {
 			print "Summarize $network, $subnet \n";
-			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
+			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'subnet'}{$subnet}},$JKFlow::mylist{'subnet'}{$subnet}{'samplerate'});
 		}
 	}  
 	
@@ -1039,18 +1038,18 @@ sub report {
 		if (! -d $JKFlow::OUTDIR."/all" ) {
 			mkdir($JKFlow::OUTDIR."/all",0755);
 		}
-		reporttorrdfiles($self,"/all",\%{$JKFlow::mylist{'all'}});
+		reporttorrdfiles($self,"/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
 
 	if (! -d $JKFlow::OUTDIR."/total_router" ) {
 		mkdir($JKFlow::OUTDIR."/total_router",0755);
 	}
-	reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}});
+	reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}},1);
     
 	if (! -d $JKFlow::OUTDIR."/total_subnet" ) {
 		mkdir($JKFlow::OUTDIR."/total_subnet",0755);
 	}
-	reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}});
+	reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}},1);
 
 	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
 		if (${$JKFlow::mylist{'router'}{$router}}{'write'} eq 'yes') {
@@ -1058,9 +1057,32 @@ sub report {
 			if (! -d $JKFlow::OUTDIR . "/router_$router" ) {
 				mkdir($JKFlow::OUTDIR . "/router_$router",0755);
 			}
-			reporttorrdfiles($self,"/router_".$router,\%{$JKFlow::mylist{'router'}{$router}});
+			reporttorrdfiles($self,"/router_".$router,\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
+		}
+		if (defined $JKFlow::mylist{'router'}{$router}{'interface'}) {
+			foreach my $interface (keys %{$JKFlow::mylist{'router'}{$router}{'interface'}}) {
+			#use Data::Dumper;
+			#print "INTERFACES:".Dumper($JKFlow::mylist{'router'}{$router}{'interface'})."\n";
+				if (defined $JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{description}) {
+					$interf_name = ${$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}}{description};
+					print "Interface:$interf_name\n";
+					if (! -d $JKFlow::OUTDIR."/router_$router/$interf_name" ) {
+						print "DIRECTORY:".$JKFlow::OUTDIR."/router_$router/$interf_name\n";
+						mkdir($JKFlow::OUTDIR."/router_$router/$interf_name",0755);
+					}
+					reporttorrdfiles($self,"/router_".$router."/".$interf_name,\%{$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}},$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{'samplerate'});
+				} else {
+					print "Interface:$interface\n";
+					if (! -d $JKFlow::OUTDIR."/router_$router/interface_$interface" ) {
+						print "DIRECTORY:".$JKFlow::OUTDIR."/router_$router/interface_$interface\n";
+						mkdir($JKFlow::OUTDIR."/router_$router/interface_$interface", 0755);
+					}
+					reporttorrdfiles($self,"/router_".$router."/interface_".$interface,\%{$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}},$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{'samplerate'});
+				}
+			}
 		}
 	}
+						 
 
 	foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
 		if (${$JKFlow::mylist{'subnet'}{$subnet}}{'write'} eq 'yes') {
@@ -1068,7 +1090,7 @@ sub report {
 			if (! -d $JKFlow::OUTDIR ."/subnet_$subnetdir" ) {
 				mkdir($JKFlow::OUTDIR ."/subnet_$subnetdir",0755);
 			}
-			reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}});
+			reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}},$JKFlow::mylist{'subnet'}{$subnet}{'samplerate'});
 		}
 	}
     
@@ -1076,7 +1098,7 @@ sub report {
 		if (! -d $JKFlow::OUTDIR."/network_".$network ) {
 			mkdir($JKFlow::OUTDIR."/network_".$network,0755);
 		}
-		reporttorrdfiles($self,"/network_".$network,\%{$JKFlow::mylist{'network'}{$network}});
+		reporttorrdfiles($self,"/network_".$network,\%{$JKFlow::mylist{'network'}{$network}},1);
 	}
 }
 
