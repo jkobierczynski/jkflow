@@ -71,15 +71,15 @@ my @single_colors = (	0xFF0000, # Red
 			0x746FAE, # lavender
 					);
 
-my %double_list =	[
-			in => ( @double_colors ),
-			out => ( @double_colors ) 
-					];
+my %double_list =	(
+			in =>  [@double_colors] ,
+			out => [@double_colors]  
+					);
 
-my %single_list =	[
-			in => ( @single_colors ),
-			out =>( @single_colors )
-					];
+my %single_list =	(
+			in =>  [@single_colors] ,
+			out => [@single_colors] 
+					);
 
 if( !param() ) {
     &showList();
@@ -869,17 +869,20 @@ sub cleanDEF {
 
 # make service labels a consistent length
 sub cleanServiceLabel {
-    my $labelLength = 23;
+    my $labelLength = 20;
+    my $labelLength2 = 20;
+    my $r = shift;
     my $s = shift;
-    my $txt = shift;
-    return uc($s) . ' ' x ($labelLength - length $s) . $txt;
+    return uc($r) . ' ' x ($labelLength - length $r) . uc($s) . ' ' x ($labelLength2 - length $s); 
 }
 
 # make protocol labels a consistent length
 sub cleanProtocolLabel {
-    my $labelLength = 50;
+    my $labelLength = 40;
+    my $labelLength2 = 40;
+    my $r = shift;
     my $p = shift;
-    return uc($p) . ' ' x ($labelLength - length $p);
+    return uc($r) . ' ' x ($labelLength - length $r) . uc($p) . ' ' x ($labelLength2 - length $p);
 }
 
 # make other percentage labels a consistent length
@@ -1017,24 +1020,21 @@ sub plotreport {
 			$neg='';
 		}
 		foreach my $p (keys %{$ref->{'protocol'}} ) {
-			$countref->{protocol}++;
-			if( $countref->{protocol} == 1 ) {
-				use Data::Dumper;
-				push @{$argsref->{protocol}}, Dumper(%single_list);
+			$countref->{protocol}{$direction}++;
+			if( $countref->{protocol}{$direction} == 1 ) {
 				$string = 'AREA:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
 			} else {
 				$string = 'STACK:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
 			}
       			if ($direction eq 'in') {
-				push @{$argsref->{protocol}}, $string.':'.cleanProtocolLabel($p);
-				push @{$argsref->{protocol}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_out_pct").':AVERAGE:%.1lf%% Out';
-				push @{$argsref->{protocol}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_in_pct").':AVERAGE:%.1lf%% In\n';
+				push @{$argsref->{protocol}{in}}, $string.':'.cleanProtocolLabel($basename, $p);
+				push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_out_pct").':AVERAGE:%.1lf%% Out';
+				push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_in_pct").':AVERAGE:%.1lf%% In\n';
 			} else {
-				push @{$argsref->{protocol}}, $string;
+				push @{$argsref->{protocol}{out}}, $string;
 			}
 		
 		}
-		$countref->{protocol}=0;
 	}
 
 	foreach my $direction ('out','in') {
@@ -1045,62 +1045,70 @@ sub plotreport {
 		}
 		foreach my $s (keys %{$ref->{'service'}} ) {
 			foreach my $srcdst ('src','dst') {
-				$countref->{service}++;
-				if( $countref->{service} == 1 ) {
-					#push @{$argsref->{service}}, 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@double_colors).':'.&cleanServiceLabel($s.' '.$srcdst.'+');
-					$string = 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@double_colors);
+				$countref->{service}{$direction}++;
+				if( $countref->{service}{$direction} == 1 ) {
+					$string = 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$double_list{$direction}});
 				} else {
-					#push @{$argsref->{service}}, 'STACK:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@double_colors).':'.&cleanServiceLabel($s, ' '.$srcdst.' ');
-					$string = 'STACK:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@double_colors);
+					$string = 'STACK:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$double_list{$direction}});
 				}
       				if ($direction eq 'in') {
-					push @{$argsref->{protocol}}, $string.':'.cleanServiceLabel($s.' '.$srcdst.' ');
+					push @{$argsref->{service}{in}}, $string.':'.cleanServiceLabel($basename,$s.' '.$srcdst);
 				} else {
-					push @{$argsref->{protocol}}, $string;
+					push @{$argsref->{service}{out}}, $string;
 				}
 			}
       			if ($direction eq 'in') {
-				push @{$argsref->{protocol}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_out_pct").':AVERAGE:%.1lf%% Out';
-				push @{$argsref->{protocol}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_in_pct").':AVERAGE:%.1lf%% In\n';
+				push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_out_pct").':AVERAGE:%.1lf%% Out';
+				push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_in_pct").':AVERAGE:%.1lf%% In\n';
 			}
 		}
-		$countref->{service}=0;
 	}
 	
-	foreach my $direction ('out','in') {
-		foreach my $t (keys %{$ref->{'tos'}} ) {
-      			if ($direction eq 'in') {
-				$neg='_neg';
-			} else {
-				$neg='';
-			}
-			$countref->{tos}++;
-			if( $countref->{tos} == 1 ) {
-				#push @{$argsref->{tos}}, 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors).':'.&cleanProtocolLabel($t);
-				push @{$argsref->{tos}}, 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors);
-			} else {
-				#push @{$argsref->{tos}}, 'STACK:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors).':'.&cleanProtocolLabel($t);
-				push @{$argsref->{tos}}, 'STACK:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors);
-			}
-		}
-		$countref->{tos}=0;
-	}
-
 	foreach my $direction ('out','in') {
       		if ($direction eq 'in') {
 			$neg='_neg';
 		} else {
 			$neg='';
 		}
-		$countref->{total}++;
-		if( $countref->{total} == 1 ) {
-			#push @{$argsref->{total}}, 'AREA:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors).':TOTAL';
-			push @{$argsref->{total}}, 'AREA:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors);
-		} else {
-			#push @{$argsref->{total}}, 'STACK:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors).':TOTAL';
-			push @{$argsref->{total}}, 'STACK:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@single_colors);
+		foreach my $t (keys %{$ref->{'tos'}} ) {
+			$countref->{tos}{$direction}++;
+			if( $countref->{tos}{$direction} == 1 ) {
+				$string = 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+			} else {
+				$string = 'STACK:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+			}
+      			if ($direction eq 'in') {
+				push @{$argsref->{tos}{in}}, $string.':'.cleanProtocolLabel($basename,$t);
+				push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_out_pct").':AVERAGE:%.1lf%% Out';
+				push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_in_pct").':AVERAGE:%.1lf%% In\n';
+			} else {
+				push @{$argsref->{tos}{out}}, $string;
+			}
+					
 		}
-		$countref->{total}=0;
+	}
+
+	if (param ($basename.'_total') ) {
+		foreach my $direction ('out','in') {
+	      		if ($direction eq 'in') {
+				$neg='_neg';
+			} else {
+				$neg='';
+			}
+			$countref->{total}{$direction}++;
+			if( $countref->{total}{$direction} == 0 ) {
+				$string = 'LINE:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+			} elsif( $countref->{total}{$direction} == 1 ) {
+				$string = 'AREA:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+			} else {
+				$string = 'STACK:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+			}
+	      		if ($direction eq 'in') {
+				push @{$argsref->{total}{in}}, $string.':TOTAL '.$basename;
+			} else {
+				push @{$argsref->{total}{out}}, $string;
+			}
+		}
 	}
 }
 
@@ -1152,13 +1160,13 @@ sub io_report {
 		}
 	}
 	if (defined $subdir{'all'}) {
-		plotreport(\%args,\%{$subdir{'all'}},'',$reportType,\%count);
+		plotreport(\%args,\%{$subdir{'all'}},'all',$reportType,\%count);
 	}
 
-	if (defined $args{protocol}) 	{ push @arg, @{$args{protocol}}; }
-	if (defined $args{service})  	{ push @arg, @{$args{service}};  }
-	if (defined $args{tos})		{ push @arg, @{$args{tos}};	 }
-	if (defined $args{total})	{ push @arg, @{$args{total}};    }
+	if (defined $args{protocol}) 	{ push @arg, ( @{$args{protocol}{out}}, @{$args{protocol}{in}} ); }
+	if (defined $args{service})  	{ push @arg, ( @{$args{service}{out}}, @{$args{service}{in}} ); }
+	if (defined $args{tos})		{ push @arg, ( @{$args{tos}{out}}, @{$args{tos}{in}} );	 }
+	if (defined $args{total})	{ push @arg, ( @{$args{total}{out}}, @{$args{total}{in}} );    }
 
     #my $count;
     #my $neg;
