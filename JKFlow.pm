@@ -672,7 +672,6 @@ my $ref=shift;
 	}
 }
 
-
 sub countpackets {
     	my $ref = shift;
     	my $which = shift;
@@ -732,7 +731,6 @@ sub countmulticasts {
 	}
 } 
 
-
 sub perfile {
     # Only do this, so we get the filetime from our super-class
     my $self = shift;
@@ -746,7 +744,7 @@ sub summarize {
    my $sumref = shift;
    my $addref = shift;
    my $typeos;
-  
+
    foreach my $type ('bytes','pkts','flows') {
       foreach my $which ('in','out') {
 		if (defined $addref->{'protocol'}) {
@@ -759,6 +757,7 @@ sub summarize {
 				}
 			}
 		}
+
 		if (defined $addref->{'service'}) {
 			foreach my $protocol (keys %{$addref->{'service'}}) { 
 				foreach my $service (keys %{$addref->{'service'}{$protocol}}) {
@@ -769,6 +768,7 @@ sub summarize {
 				}
 			}
 		}
+
 		if (defined $addref->{'multicast'}) {
          		$sumref->{'multicast'}{'total'}{$which}{$type} 
 				+= $addref->{'multicast'}{'total'}{$which}{$type};
@@ -791,21 +791,19 @@ sub summarize {
    }
 }   
 
-sub reporttorrdfiles {
+sub reporttorrd {
 
-   
-    use RRDs;			# To actually produce results
-    my $self=shift;
-    my $dir=shift;
-    my $reference=shift;
-    my ($file,$tmp);
-    my @values = ();
+ 	use RRDs;			# To actually produce results
+	my $self=shift;
+	my $file=shift;
+	my $ref=shift;
+	my $tmp;
+	my @values = ();
 
-    # First, always generate a totals report
-    # createGeneralRRD we get from our parent, FlowScan
-    # Create a new rrd if one doesn't exist
-    $file = $JKFlow::OUTDIR . $dir . "/total.rrd";
-    $self->createGeneralRRD($file,
+	# First, always generate a totals report
+	# createGeneralRRD we get from our parent, FlowScan
+	# Create a new rrd if one doesn't exist
+	$self->createGeneralRRD($file,
 			    qw(
 			       ABSOLUTE in_bytes
 			       ABSOLUTE out_bytes
@@ -816,139 +814,73 @@ sub reporttorrdfiles {
 			       )
 			    ) unless -f $file; 
 
-    foreach my $i ('bytes','pkts','flows') {
-	foreach my $j ('in','out') {
-             if (!(defined($tmp = $reference->{'total'}{$j}{$i}))) {
-                  push(@values, 1);
-             }
-             else {
-                  push(@values, $tmp);
-                  $reference->{'total'}{$j}{$i}=0;
-             }
+	foreach my $i ('bytes','pkts','flows') {
+		foreach my $j ('in','out') {
+			if (!(defined($tmp = $ref->{$j}{$i}))) {
+				push(@values, 1);
+			} else {
+				push(@values, $tmp);
+				$ref->{$j}{$i}=0;
+			}
+		}
 	}
-    }
-    $self->updateRRD($file, @values);
-    print "File: $file @values\n";
-    foreach my $tos ('normal','other') {
-    	@values = ();
-    	$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
-    	$self->createGeneralRRD($file,
-        	                    qw(
-                	               ABSOLUTE in_bytes
-                        	       ABSOLUTE out_bytes
-	                               ABSOLUTE in_pkts
-        	                       ABSOLUTE out_pkts
-                	               ABSOLUTE in_flows
-                        	       ABSOLUTE out_flows
-	                               )
-        	                    ) unless -f $file;
+	$self->updateRRD($file, @values);
+	print "File: $file @values\n";
+}
 
-	    foreach my $i ('bytes','pkts','flows') {
-	        foreach my $j ('in','out') {
-        	     if (!(defined($tmp = $reference->{'tos'}{$tos}{$j}{$i}))) {
-                	  push(@values, 0);
-	             }
-        	     else {
-                	  push(@values, $tmp);
-                          $reference->{'tos'}{$tos}{$j}{$i}=0;
-             	     }
-                }
-            }
-    	$self->updateRRD($file, @values);
-    	print "File: $file @values\n";
-    }
-    
-    @values = ();
-    $file = $JKFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
-    $self->createGeneralRRD($file,
-                            qw(
-                               ABSOLUTE in_bytes
-                               ABSOLUTE out_bytes
-                               ABSOLUTE in_pkts
-                               ABSOLUTE out_pkts
-                               ABSOLUTE in_flows
-                               ABSOLUTE out_flows
-                               )
-                            ) unless -f $file;
+sub reporttorrdfiles {
 
-    foreach my $i ('bytes','pkts','flows') {
-        foreach my $j ('in','out') {
-             if (!(defined($tmp = $reference->{'multicast'}{'total'}{$j}{$i}))) {
-                  push(@values, 0);
-             }
-             else {
-                  push(@values, $tmp);
-                  $reference->{'multicast'}{'total'}{$j}{$i}=0;
-             }
-        }
-    }
-    $self->updateRRD($file, @values);
-    print "File: $file @values\n";
- 
-    foreach my $protocol (keys %{$reference->{'protocol'}}) {
-          if (!($tmp = getprotobynumber($protocol))) {
-	    $tmp = $protocol;
-          }
-          $file = $JKFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
-          @values = ();
-	  foreach my $i ('bytes','pkts','flows') {
-	        foreach my $j ('in','out') {
-                      if (!(defined($tmp = $reference->{'protocol'}{$protocol}{'total'}{$j}{$i}))) {
-                         push(@values, 0);
-                      }
-                      else {        
-		         push(@values, $tmp);
-                         $reference->{'protocol'}{$protocol}{'total'}{$j}{$i}=0;
-                      }
-                   }
-          }
-          $self->createGeneralRRD($file,
-                              qw(
-                              ABSOLUTE in_bytes
-                              ABSOLUTE out_bytes
-                              ABSOLUTE in_pkts
-                              ABSOLUTE out_pkts
-                              ABSOLUTE in_flows
-                              ABSOLUTE out_flows
-                              )
-                            ) unless -f $file;
-	  $self->updateRRD($file, @values);
-	  print "File: $file @values\n";
-    }
-   
-    foreach my $src ('src','dst') { 
-      foreach my $protocol (keys %{$reference->{'service'}}) {
-      	     foreach my $srv (keys %{$reference->{'service'}{$protocol}}) {
-                if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-		  $tmp = $srv;
-                }
-	        $file = $JKFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
-	        @values = ();
-	        foreach my $i ('bytes','pkts','flows') {
-	           foreach my $j ('in','out') {
-                      if (!(defined($tmp = $reference->{'service'}{$protocol}{$srv}{$src}{$j}{$i}))) {
-                         push(@values, 0);
-                      }
-                      else {        
-		         push(@values, $tmp);
-                         $reference->{'service'}{$protocol}{$srv}{$src}{$j}{$i}=0;
-                      }
-                   }
-                }
-                $self->createGeneralRRD($file,
-                                qw(
-                                   ABSOLUTE in_bytes
-                                   ABSOLUTE out_bytes
-                                   ABSOLUTE in_pkts
-                                   ABSOLUTE out_pkts
-                                   ABSOLUTE in_flows
-                                   ABSOLUTE out_flows
-                                   )
-                                ) unless -f $file;
-	        $self->updateRRD($file, @values);
-		print "File: $file @values\n";
-             }
-      }
+	use RRDs;
+	my $self=shift;
+	my $dir=shift;
+	my $ref=shift;
+	my ($file,$tmp);
+
+	# First, always generate a totals report
+	# createGeneralRRD we get from our parent, FlowScan
+ 	# Create a new rrd if one doesn't exist
+	
+	$file = $JKFlow::OUTDIR . $dir . "/total.rrd";
+	reporttorrd($self,$file,\%{$ref->{'total'}});
+
+	foreach my $tos ('normal','other') {
+		$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
+		reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}});
+ 	}
+
+	$file = $JKFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
+	reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}});
+
+	foreach my $protocol (keys %{$ref->{'protocol'}}) {
+		if (!($tmp = getprotobynumber($protocol))) {
+			$tmp = $protocol;
+		}
+		$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
+		reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}});
+	}
+
+	foreach my $src ('src','dst') {
+		foreach my $protocol (keys %{$ref->{'service'}}) {
+			foreach my $srv (keys %{$ref->{'service'}{$protocol}}) {
+				if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
+					$tmp = $srv;
+				}
+				$file = $JKFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
+				reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}});
+			}
+		}
+	}
+
+    if (defined $ref->{'direction'}) {
+	foreach my $direction (keys %{$ref->{'direction'}}) {
+		foreach my $src ('src','dst') { 
+			foreach my $application (keys %{$ref->{'direction'}{$direction}{'application'}}) {
+	        		$file = $JKFlow::OUTDIR. $dir . "/service_" . $direction . "_" . $application . "_" . $src . ".rrd";
+				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'application'}{$application}{$src}});
+			}
+		}
+    		#reporttorrdfiles($self, $dir,\%{$reference->{'direction'}{$direction}});
+	}
     }
 }
 
@@ -971,56 +903,54 @@ sub report {
 		}
 	}
 
-    foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-    	foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
-        print "Summarize $network, $router \n";
-      		summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}});
-    	}
-    	foreach my $subnet (keys %{$JKFlow::mylist{'network'}{$network}{'subnet'}}) {
-        print "Summarize $network, $subnet \n";
-      		summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
-    	}
-    }  
-    use Data::Dumper;
-    print Dumper(\%{$JKFlow::mylist});
-
+	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
+ 		foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
+			print "Summarize $network, $router \n";
+			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}});
+		}
+		foreach my $subnet (keys %{$JKFlow::mylist{'network'}{$network}{'subnet'}}) {
+			print "Summarize $network, $subnet \n";
+			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'subnet'}{$subnet}});
+		}
+	}  
+	
 	use Data::Dumper;
 	print "Data:".Dumper(%JKFlow::mylist)."\n";
-    reporttorrdfiles($self,"",\%JKFlow::mylist);
+	reporttorrdfiles($self,"",\%JKFlow::mylist);
 
-    if (! -d $JKFlow::OUTDIR."/total_router" ) {
-    mkdir($JKFlow::OUTDIR."/total_router",0755);
-    }
-    reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}});
-    
-    if (! -d $JKFlow::OUTDIR."/total_subnet" ) {
-    mkdir($JKFlow::OUTDIR."/total_subnet",0755);
-    }
-    reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}});
-
-    foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-        ($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
-        print "Router:$router , Routerdir:$routerdir \n";
-	if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
-	    mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
+	if (! -d $JKFlow::OUTDIR."/total_router" ) {
+		mkdir($JKFlow::OUTDIR."/total_router",0755);
 	}
-    	reporttorrdfiles($self,"/router_".$routerdir,\%{$JKFlow::mylist{'router'}{$router}});
-    }
-
-    foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
-        ($subnetdir=$subnet) =~ s/\//_/g;
-	if (! -d $JKFlow::OUTDIR ."/subnet_$subnetdir" ) {
-	    mkdir($JKFlow::OUTDIR ."/subnet_$subnetdir",0755);
-	}
-     	reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}});
-    }
+	reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}});
     
-    foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-    	if (! -d $JKFlow::OUTDIR."/network_".$network ) {
-    	mkdir($JKFlow::OUTDIR."/network_".$network,0755);
-    	}
-    	reporttorrdfiles($self,"/network_".$network,\%{$JKFlow::mylist{'network'}{$network}});
-    }
+	if (! -d $JKFlow::OUTDIR."/total_subnet" ) {
+		mkdir($JKFlow::OUTDIR."/total_subnet",0755);
+	}
+	reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}});
+
+	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
+		($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
+		print "Router:$router , Routerdir:$routerdir \n";
+		if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
+			mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
+		}
+		reporttorrdfiles($self,"/router_".$routerdir,\%{$JKFlow::mylist{'router'}{$router}});
+	}
+
+	foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
+		($subnetdir=$subnet) =~ s/\//_/g;
+		if (! -d $JKFlow::OUTDIR ."/subnet_$subnetdir" ) {
+			mkdir($JKFlow::OUTDIR ."/subnet_$subnetdir",0755);
+		}
+		reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}});
+	}
+    
+	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
+		if (! -d $JKFlow::OUTDIR."/network_".$network ) {
+			mkdir($JKFlow::OUTDIR."/network_".$network,0755);
+		}
+		reporttorrdfiles($self,"/network_".$network,\%{$JKFlow::mylist{'network'}{$network}});
+	}
 }
 
 # Lifted totally and shamelessly from CampusIO.pm
