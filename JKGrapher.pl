@@ -328,7 +328,7 @@ sub showMenu {
 			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type."_".$r)],-size => 5,-multiple => 'true' ) );
 			print $q->td( $q->checkbox( -name => "${r}_all_tos",-value => '1',-label => 'Yes' ) );
 		} else {
-			print $q->td( $q->scrolling_list( -name => "${r}_protocol",-values => [sort &getProtocolList($type)],-size => 1,-multiple => 'true' ) );
+			print $q->td( $q->scrolling_list( -name => "${r}_protocol",-values => [sort &getProtocolList($type)],-size => 5,-multiple => 'true' ) );
 			print $q->td( $q->checkbox( -name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
 			print $q->td( $q->scrolling_list( -name => "${r}_service",-values => [sort &getServiceList($type)],-size => 5,-multiple => 'true' ) );
 			print $q->td( $q->checkbox( -name => "${r}_all_services",-value => '1',-label => 'Yes' ) );
@@ -353,6 +353,25 @@ sub showMenu {
     print $q->end_form;
     print $q->end_html;    
     exit;
+}
+
+sub getFilename {
+	my $type = shift;
+	my $r = shift;
+	my $subkey = shift;
+	my $file=$rrddir;
+
+	if ($type eq 'all') {
+		$file .='/';
+	} elsif ($r eq 'total_router' || $r eq 'total_subnet') {
+		$file .= '/'.$r.'/';
+	} elsif	($type eq 'network' || $type eq 'subnet' || $type eq 'router') {
+		$file .= '/'.$type.'_'.$r.'/';
+	}
+	$file .= $subkey;
+
+        -f $file or &browserDie("Cannot find file $file");
+	return $file;
 }
 
 sub browserDie {
@@ -464,7 +483,7 @@ sub getFilenames {
                 -f $subdir{$type}{$r}{'service'}{$s}.'_dst.rrd' or &browserDie("Cannot find file $subdir{$type}{$r}{'service'}{$s}");
                 }
             }
-  	    if ( param("${r}_tos_all")) {
+  	    if ( param("${r}_tos")) {
             	foreach my $t (param("${r}_tos")) { 
            	   $subdir{$type}{$r}{'tos'}{$t}="${rrddir}/${type}_${r}/tos_${t}.rrd";
               	  -f $subdir{$type}{$r}{'tos'}{$t} or &browserDie("Cannot find file $subdir{$type}{$r}{'tos'}{$t}");
@@ -520,7 +539,7 @@ sub getFilenames {
                 -f $subdir{$r}{'service'}{$s}.'_src.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
                 -f $subdir{$r}{'service'}{$s}.'_dst.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
         }
-        if ( param("${r}_total") || param("${r}_tos") || param("${r}_all_tos") || param("${r}_protocol_multicast") || param("${r}_all_protocols") ) {
+        if ( param("${r}_total") || param("${r}_tos") || param("${r}_all_tos") || param("${r}_protocol") || param("${r}_all_protocols") ) {
 		$subdir{$r}{'total'}="${rrddir}/${r}/total.rrd";
 		-f $subdir{$r}{'total'} or &browserDie("Cannot find file $subdir{$r}{'total'}");
 	}
@@ -552,7 +571,7 @@ sub getFilenames {
 	}
     }
     foreach my $t (getTosList('')) { 
-        if ( param("all_tos")) {
+        if ( param("all_tos_${t}")) {
         $subdir{'all'}{'tos'}{$t}="${rrddir}/tos_${t}.rrd";
         -f $subdir{'all'}{'tos'}{$t} or &browserDie("Cannot find file $subdir{'all'}{'tos'}{$t}");
         }
@@ -573,7 +592,8 @@ sub getFilenames {
         $subdir{'all'}{'network'}{$n}="${rrddir}/network_${n}.rrd";
         -f $subdir{'all'}{'network'}{$n} or &browserDie("Cannot find file $subdir{'all'}{'network'}{$n}");
     }
-    if ( param("all_total") || param('all_network')|| param('all_tos')|| param('all_protocol') || param('all_service') || param('all_all_services') ) {
+    if ( 	param("all_total") || param('all_network')|| param('all_tos') || param('all_all_tos')
+	|| 	param('all_protocol') || param('all_all_protocols') || param('all_service') || param('all_all_services') ) {
     	$subdir{'all'}{'total'}="${rrddir}/total.rrd";
     	-f $subdir{'all'}{'total'} or &browserDie("Cannot find file $subdir{'all'}{'total'}");
     }
@@ -851,7 +871,7 @@ sub io_report {
     unless( exists $reportName{$reportType} ) {
 	&browserDie('invalid report parameter');
     }
-    #push @args, Dumper(%subdir);
+    push @args, Dumper(%subdir);
 
     push @args, ('--interlaced',
 		 '--imgformat='.uc($imageType),
@@ -867,14 +887,14 @@ sub io_report {
     foreach my $type ('network','router','subnet') {
         if (defined $subdir{'total_'.$type}) {
 	        if( $reportType eq 'bits' ) {
-		        push @args, ('DEF:'.&cleanDEF("${type}_total_out_bytes").'='.$subdir{'total_'.$type}{'total'}.':out_bytes:AVERAGE',
-				     'DEF:'.&cleanDEF("${type}_total_in_bytes").'='.$subdir{'total_'.$type}{'total'}.':in_bytes:AVERAGE',
+		        push @args, ('DEF:'.&cleanDEF("${type}_total_out_bytes").'='.&getFilename('', 'total_'.$type,'total.rrd').":out_bytes:AVERAGE",
+				     'DEF:'.&cleanDEF("${type}_total_in_bytes").'='.&getFilename('', 'total_'.$type,'total.rrd').":in_bytes:AVERAGE",
 			  	     'CDEF:'.&cleanDEF("${type}_total_out_bits").'='.&cleanDEF("${type}_total_out_bytes").',8,*',
 				     'CDEF:'.&cleanDEF("${type}_total_in_bits").'='.&cleanDEF("${type}_total_in_bytes").',8,*',
 				     'CDEF:'.&cleanDEF("${type}_total_in_bits_neg").'='.&cleanDEF("${type}_total_in_bits").',-1,*');
 		    } else {
-		        push @args, ('DEF:'.&cleanDEF("${type}_total_out_${reportType}").'='.$subdir{'total_'.$type}{'total'}.":out_${reportType}:AVERAGE",
-				     'DEF:'.&cleanDEF("${type}_total_in_${reportType}").'='.$subdir{'total_'.$type}{'total'}.":in_${reportType}:AVERAGE",
+		        push @args, ('DEF:'.&cleanDEF("${type}_total_out_${reportType}").'='.&getFilename('', 'total_'.$type,'total.rrd').":out_${reportType}:AVERAGE",
+				     'DEF:'.&cleanDEF("${type}_total_in_${reportType}").'='.&getFilename('', 'total_'.$type,'total.rrd').":in_${reportType}:AVERAGE",
 				     'CDEF:'.&cleanDEF("${type}_total_in_${reportType}_neg").'='.&cleanDEF("${type}_total_in_${reportType}").',-1,*');
 		    }
 	}
@@ -883,14 +903,14 @@ sub io_report {
 	$str2 = 'CDEF:'.&cleanDEF("${type}_other_protocol_out_pct").'=100';
         foreach my $p ( keys %{$subdir{'total_'.$type}{'protocol'}} ) {
 	    if( $reportType eq 'bits' ) {
-		push @args, ('DEF:'.&cleanDEF("${type}_${p}_out_bytes").'='.$subdir{'total_'.$type}{'protocol'}{$p}.':out_bytes:AVERAGE',
-			     'DEF:'.&cleanDEF("${type}_${p}_in_bytes").'='.$subdir{'total_'.$type}{'protocol'}{$p}.':in_bytes:AVERAGE',
+		push @args, ('DEF:'.&cleanDEF("${type}_${p}_out_bytes").'='.&getFilename('','total_'.$type,'protocol_'.$p.'.rrd').":out_bytes:AVERAGE",
+			     'DEF:'.&cleanDEF("${type}_${p}_in_bytes").'='.&getFilename('','total_'.$type,'protocol_'.$p.'.rrd').":in_bytes:AVERAGE",
 			     'CDEF:'.&cleanDEF("${type}_${p}_out_bits").'='.&cleanDEF("${type}_${p}_out_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${type}_${p}_in_bits").'='.&cleanDEF("${type}_${p}_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${type}_${p}_in_bits_neg").'='.&cleanDEF("${type}_${p}_in_bytes").',8,*,-1,*');
 	    } else {
-		push @args, ('DEF:'.&cleanDEF("${type}_${p}_out_${reportType}").'='.$subdir{'total_'.$type}{'protocol'}{$p}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("${type}_${p}_in_${reportType}").'='.$subdir{'total_'.$type}{'protocol'}{$p}.":in_${reportType}:AVERAGE",
+		push @args, ('DEF:'.&cleanDEF("${type}_${p}_out_${reportType}").'='.&getFilename('','total_'.$type,'protocol_'.$p.'.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("${type}_${p}_in_${reportType}").'='.&getFilename('','total_'.$type,'protocol_'.$p.'.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${type}_${p}_in_${reportType}_neg").'='.&cleanDEF("${type}_${p}_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("${type}_${p}_in_pct").'='.&cleanDEF("${type}_${p}_in_${reportType}").','.&cleanDEF("${type}_total_in_${reportType}").',/,100,*';
@@ -909,10 +929,10 @@ sub io_report {
 	foreach my $s (keys %{$subdir{'total_'.$type}{'service'}}) {
 	    if( $reportType eq 'bits' ) {
 		push @args, (
-			'DEF:'.&cleanDEF("${type}_${s}_src_out_bytes").'='.$subdir{'total_'.$type}{'service'}{$s}.'_src.rrd:out_bytes:AVERAGE',
-			'DEF:'.&cleanDEF("${type}_${s}_src_in_bytes").'='.$subdir{'total_'.$type}{'service'}{$s}.'_src.rrd:in_bytes:AVERAGE',
-			'DEF:'.&cleanDEF("${type}_${s}_dst_out_bytes").'='.$subdir{'total_'.$type}{'service'}{$s}.'_dst.rrd:out_bytes:AVERAGE',
-			'DEF:'.&cleanDEF("${type}_${s}_dst_in_bytes").'='.$subdir{'total_'.$type}{'service'}{$s}.'_dst.rrd:in_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("${type}_${s}_src_out_bytes").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_src.rrd').":out_bytes:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_src_in_bytes").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_src.rrd').":in_bytes:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_dst_out_bytes").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_dst.rrd').":out_bytes:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_dst_in_bytes").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_dst.rrd').":in_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("${type}_${s}_src_out_bits").'='.&cleanDEF("${type}_${s}_src_out_bytes").',8,*',
 			'CDEF:'.&cleanDEF("${type}_${s}_src_in_bits").'='.&cleanDEF("${type}_${s}_src_in_bytes").',8,*',
 			'CDEF:'.&cleanDEF("${type}_${s}_src_in_bits_neg").'='.&cleanDEF("${type}_${s}_src_in_bytes").',8,*,-1,*',
@@ -921,10 +941,10 @@ sub io_report {
 			'CDEF:'.&cleanDEF("${type}_${s}_dst_in_bits_neg").'='.&cleanDEF("${type}_${s}_dst_in_bytes").',8,*,-1,*');
 	    } else {
 		push @args, (
-			'DEF:'.&cleanDEF("${type}_${s}_src_out_${reportType}").'='.$subdir{'total_'.$type}{'service'}{$s}."_src.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("${type}_${s}_src_in_${reportType}").'='.$subdir{'total_'.$type}{'service'}{$s}."_src.rrd:in_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("${type}_${s}_dst_out_${reportType}").'='.$subdir{'total_'.$type}{'service'}{$s}."_dst.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("${type}_${s}_dst_in_${reportType}").'='.$subdir{'total_'.$type}{'service'}{$s}."_dst.rrd:in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_src_out_${reportType}").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_src.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_src_in_${reportType}").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_src.rrd').":in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_dst_out_${reportType}").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_dst.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${type}_${s}_dst_in_${reportType}").'='.&getFilename('', 'total_'.$type,'service_'.$s.'_dst.rrd').":in_${reportType}:AVERAGE",
 			'CDEF:'.&cleanDEF("${type}_${s}_src_in_${reportType}_neg").'='.&cleanDEF("${type}_${s}_src_in_${reportType}").',-1,*',
 			'CDEF:'.&cleanDEF("${type}_${s}_dst_in_${reportType}_neg").'='.&cleanDEF("${type}_${s}_dst_in_${reportType}").',-1,*');
 	    }
@@ -943,14 +963,14 @@ sub io_report {
 	$str2 = 'CDEF:'.&cleanDEF("${type}_other_tos_out_pct").'=100';
 	foreach my $t (keys %{$subdir{'total_'.$type}{'tos'}} ) {
 	    if( $reportType eq 'bits' ) {
-		push @args, ('DEF:'.&cleanDEF("${type}_${t}_out_bytes").'='.$subdir{'total_'.$type}{'tos'}{$t}.':out_bytes:AVERAGE',
-			     'DEF:'.&cleanDEF("${type}_${t}_in_bytes").'='.$subdir{'total_'.$type}{'tos'}{$t}.':in_bytes:AVERAGE',
+		push @args, ('DEF:'.&cleanDEF("${type}_${t}_out_bytes").'='.&getFilename('','total_'.$type,'tos_'.$t.'.rrd').":out_bytes:AVERAGE",
+			     'DEF:'.&cleanDEF("${type}_${t}_in_bytes").'='.&getFilename('','total_'.$type,'tos_'.$t.'.rrd').":in_bytes:AVERAGE",
 			     'CDEF:'.&cleanDEF("${type}_${t}_out_bits").'='.&cleanDEF("${type}_${t}_out_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${type}_${t}_in_bits").'='.&cleanDEF("${type}_${t}_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${type}_${t}_in_bits_neg").'='.&cleanDEF("${type}_${t}_in_bytes").',8,*,-1,*');
 	    } else {
-		push @args, ('DEF:'.&cleanDEF("${type}_${t}_out_${reportType}").'='.$subdir{'total_'.$type}{'tos'}{$t}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("${type}_${t}_in_${reportType}").'='.$subdir{'total_'.$type}{'tos'}{$t}.":in_${reportType}:AVERAGE",
+		push @args, ('DEF:'.&cleanDEF("${type}_${t}_out_${reportType}").'='.&getFilename('','total_'.$type,'tos_'.$t.'.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("${type}_${t}_in_${reportType}").'='.&getFilename('','total_'.$type,'tos_'.$t.'.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${type}_${t}_in_${reportType}_neg").'='.&cleanDEF("${type}_${t}_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("${type}_${t}_in_pct").'='.&cleanDEF("${type}_${t}_in_${reportType}").','.&cleanDEF("${type}_total_in_${reportType}").',/,100,*';
@@ -964,17 +984,17 @@ sub io_report {
 	}
 
 
-      # CDEF for total
-      foreach my $r (keys %{$subdir{$type}}) {
+        #CDEF for total
+        foreach my $r (keys %{$subdir{$type}}) {
 	    if( $reportType eq 'bits' ) {
-	        push @args, ('DEF:'.&cleanDEF("${r}_total_out_bytes").'='.$subdir{$type}{$r}{'total'}.':out_bytes:AVERAGE',
-			     'DEF:'.&cleanDEF("${r}_total_in_bytes").'='.$subdir{$type}{$r}{'total'}.':in_bytes:AVERAGE',
+	       push @args, ('DEF:'.&cleanDEF("${r}_total_out_bytes").'='.&getFilename($type,$r,'total.rrd').":out_bytes:AVERAGE",
+			     'DEF:'.&cleanDEF("${r}_total_in_bytes").'='.&getFilename($type,$r,'total.rrd').":in_bytes:AVERAGE",
 		  	     'CDEF:'.&cleanDEF("${r}_total_out_bits").'='.&cleanDEF("${r}_total_out_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${r}_total_in_bits").'='.&cleanDEF("${r}_total_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${r}_total_in_bits_neg").'='.&cleanDEF("${r}_total_in_bits").',-1,*');
 	    } else {
-	        push @args, ('DEF:'.&cleanDEF("${r}_total_out_${reportType}").'='.$subdir{$type}{$r}{'total'}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("${r}_total_in_${reportType}").'='.$subdir{$type}{$r}{'total'}.":in_${reportType}:AVERAGE",
+	        push @args, ('DEF:'.&cleanDEF("${r}_total_out_${reportType}").'='.&getFilename($type,$r,'total.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("${r}_total_in_${reportType}").'='.&getFilename($type,$r,'total.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_total_in_${reportType}_neg").'='.&cleanDEF("${r}_total_in_${reportType}").',-1,*');
 	    }
  
@@ -983,14 +1003,14 @@ sub io_report {
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_protocol_out_pct").'=100';
         foreach my $p ( keys %{$subdir{$type}{$r}{'protocol'}} ) {
 	    if( $reportType eq 'bits' ) {
-		push @args, ('DEF:'.&cleanDEF("${r}_${p}_out_bytes").'='.$subdir{$type}{$r}{'protocol'}{$p}.':out_bytes:AVERAGE',
+		push @args, ('DEF:'.&cleanDEF("${r}_${p}_out_bytes").'='.&getFilename($type,$r,'protocol_'.$p.'.rrd').":out_bytes:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_${p}_out_bits").'='.&cleanDEF("${r}_${p}_out_bytes").',8,*',
-			     'DEF:'.&cleanDEF("${r}_${p}_in_bytes").'='.$subdir{$type}{$r}{'protocol'}{$p}.':in_bytes:AVERAGE',
+			     'DEF:'.&cleanDEF("${r}_${p}_in_bytes").'='.&getFilename($type,$r,'protocol_'.$p.'.rrd').":in_bytes:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_${p}_in_bits").'='.&cleanDEF("${r}_${p}_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${r}_${p}_in_bits_neg").'='.&cleanDEF("${r}_${p}_in_bytes").',8,*,-1,*');
 	    } else {
-		push @args, ('DEF:'.&cleanDEF("${r}_${p}_out_${reportType}").'='.$subdir{$type}{$r}{'protocol'}{$p}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("${r}_${p}_in_${reportType}").'='.$subdir{$type}{$r}{'protocol'}{$p}.":in_${reportType}:AVERAGE",
+		push @args, ('DEF:'.&cleanDEF("${r}_${p}_out_${reportType}").'='.&getFilename($type,$r,'protocol_'.$p.'.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("${r}_${p}_in_${reportType}").'='.&getFilename($type,$r,'protocol_'.$p.'.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_${p}_in_${reportType}_neg").'='.&cleanDEF("${r}_${p}_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("${r}_${p}_in_pct").'='.&cleanDEF("${r}_${p}_in_${reportType}").','.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -1009,23 +1029,23 @@ sub io_report {
 	foreach my $s (keys %{$subdir{$type}{$r}{'service'}}) {
 	    if( $reportType eq 'bits' ) {
 		push @args, (
-			'DEF:'.&cleanDEF("${r}_${s}_src_out_bytes").'='.$subdir{$type}{$r}{'service'}{$s}.'_src.rrd:out_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("${r}_${s}_src_out_bytes").'='.&getFilename($type,$r,'service_'.$s.'_src.rrd').":out_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_src_out_bits").'='.&cleanDEF("${r}_${s}_src_out_bytes").',8,*',
-			'DEF:'.&cleanDEF("${r}_${s}_src_in_bytes").'='.$subdir{$type}{$r}{'service'}{$s}.'_src.rrd:in_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("${r}_${s}_src_in_bytes").'='.&getFilename($type,$r,'service_'.$s.'_src.rrd').":in_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_src_in_bits").'='.&cleanDEF("${r}_${s}_src_in_bytes").',8,*',
 			'CDEF:'.&cleanDEF("${r}_${s}_src_in_bits_neg").'='.&cleanDEF("${r}_${s}_src_in_bytes").',8,*,-1,*',
-			'DEF:'.&cleanDEF("${r}_${s}_dst_out_bytes").'='.$subdir{$type}{$r}{'service'}{$s}.'_dst.rrd:out_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("${r}_${s}_dst_out_bytes").'='.&getFilename($type,$r,'service_'.$s.'_dst.rrd').":out_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_dst_out_bits").'='.&cleanDEF("${r}_${s}_dst_out_bytes").',8,*',
-			'DEF:'.&cleanDEF("${r}_${s}_dst_in_bytes").'='.$subdir{$type}{$r}{'service'}{$s}.'_dst.rrd:in_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("${r}_${s}_dst_in_bytes").'='.&getFilename($type,$r,'service_'.$s.'_dst.rrd').":in_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_dst_in_bits").'='.&cleanDEF("${r}_${s}_dst_in_bytes").',8,*',
 			'CDEF:'.&cleanDEF("${r}_${s}_dst_in_bits_neg").'='.&cleanDEF("${r}_${s}_dst_in_bytes").',8,*,-1,*');
 	    } else {
 		push @args, (
-			'DEF:'.&cleanDEF("${r}_${s}_src_out_${reportType}").'='.$subdir{$type}{$r}{'service'}{$s}."_src.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("${r}_${s}_src_in_${reportType}").'='.$subdir{$type}{$r}{'service'}{$s}."_src.rrd:in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${r}_${s}_src_out_${reportType}").'='.&getFilename($type,$r,'service_'.$s.'_src.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${r}_${s}_src_in_${reportType}").'='.&getFilename($type,$r,'service_'.$s.'_src.rrd').":in_${reportType}:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_src_in_${reportType}_neg").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").',-1,*',
-			'DEF:'.&cleanDEF("${r}_${s}_dst_out_${reportType}").'='.$subdir{$type}{$r}{'service'}{$s}."_dst.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("${r}_${s}_dst_in_${reportType}").'='.$subdir{$type}{$r}{'service'}{$s}."_dst.rrd:in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${r}_${s}_dst_out_${reportType}").'='.&getFilename($type,$r,'service_'.$s.'_dst.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("${r}_${s}_dst_in_${reportType}").'='.&getFilename($type,$r,'service_'.$s.'_dst.rrd').":in_${reportType}:AVERAGE",
 			'CDEF:'.&cleanDEF("${r}_${s}_dst_in_${reportType}_neg").'='.&cleanDEF("${r}_${s}_dst_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("${r}_${s}_in_pct").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").','.&cleanDEF("${r}_${s}_dst_in_${reportType}").',+,'.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -1043,14 +1063,14 @@ sub io_report {
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_tos_out_pct").'=100';
 	foreach my $t (keys %{$subdir{$type}{$r}{'tos'}} ) {
 	    if( $reportType eq 'bits' ) {
-		push @args, ('DEF:'.&cleanDEF("${r}_${t}_out_bytes").'='.$subdir{$type}{$r}{'tos'}{$t}.':out_bytes:AVERAGE',
-			     'DEF:'.&cleanDEF("${r}_${t}_in_bytes").'='.$subdir{$type}{$r}{'tos'}{$t}.':in_bytes:AVERAGE',
+		push @args, ('DEF:'.&cleanDEF("${r}_${t}_out_bytes").'='.&getFilename($type,$r,'tos_'.$t.'.rrd').":out_bytes:AVERAGE",
+			     'DEF:'.&cleanDEF("${r}_${t}_in_bytes").'='.&getFilename($type,$r,'tos_'.$t.'.rrd').":in_bytes:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_${t}_out_bits").'='.&cleanDEF("${r}_${t}_out_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${r}_${t}_in_bits").'='.&cleanDEF("${r}_${t}_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("${r}_${t}_in_bits_neg").'='.&cleanDEF("${r}_${t}_in_bytes").',8,*,-1,*');
 	    } else {
-		push @args, ('DEF:'.&cleanDEF("${r}_${t}_out_${reportType}").'='.$subdir{$type}{$r}{'tos'}{$t}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("${r}_${t}_in_${reportType}").'='.$subdir{$type}{$r}{'tos'}{$t}.":in_${reportType}:AVERAGE",
+		push @args, ('DEF:'.&cleanDEF("${r}_${t}_out_${reportType}").'='.&getFilename($type,$r,'tos_'.$t.'.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("${r}_${t}_in_${reportType}").'='.&getFilename($type,$r,'tos_'.$t.'.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_${t}_in_${reportType}_neg").'='.&cleanDEF("${r}_${t}_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("${r}_${t}_in_pct").'='.&cleanDEF("${r}_${t}_in_${reportType}").','.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -1067,14 +1087,14 @@ sub io_report {
     
     if( defined $subdir{'all'}{'total'} ) {
 	if( $reportType eq 'bits' ) {
-	    push @args, ('DEF:'.&cleanDEF("all_total_out_bytes").'='.$subdir{'all'}{'total'}.':out_bytes:AVERAGE',
+	    push @args, ('DEF:'.&cleanDEF("all_total_out_bytes").'='.&getFilename('all','','total.rrd').":out_bytes:AVERAGE",
 			 'CDEF:'.&cleanDEF("all_total_out_bits").'='.&cleanDEF("all_total_out_bytes").',8,*',
-			 'DEF:'.&cleanDEF("all_total_in_bytes").'='.$subdir{'all'}{'total'}.':in_bytes:AVERAGE',
+			 'DEF:'.&cleanDEF("all_total_in_bytes").'='.&getFilename('all','','total.rrd').":in_bytes:AVERAGE",
 			 'CDEF:'.&cleanDEF("all_total_in_bits").'='.&cleanDEF("all_total_in_bytes").',8,*',
 			 'CDEF:'.&cleanDEF("all_total_in_bits_neg").'='.&cleanDEF("all_total_in_bits").',-1,*');
 	} else {
-	    push @args, ('DEF:'.&cleanDEF("all_total_out_${reportType}").'='.$subdir{'all'}{'total'}.":out_${reportType}:AVERAGE",
-			 'DEF:'.&cleanDEF("all_total_in_${reportType}").'='.$subdir{'all'}{'total'}.":in_${reportType}:AVERAGE",
+	    push @args, ('DEF:'.&cleanDEF("all_total_out_${reportType}").'='.&getFilename('all','','total.rrd').":out_${reportType}:AVERAGE",
+			 'DEF:'.&cleanDEF("all_total_in_${reportType}").'='.&getFilename('all','','total.rrd').":in_${reportType}:AVERAGE",
 			 'CDEF:'.&cleanDEF("all_total_in_${reportType}_neg").'='.&cleanDEF("all_total_in_${reportType}").',-1,*');
         }
     }
@@ -1085,23 +1105,23 @@ sub io_report {
     foreach my $s (keys %{$subdir{'all'}{'service'}} ) {
 	    if( $reportType eq 'bits' ) {
 		push @args, (
-			'DEF:'.&cleanDEF("all_${s}_src_out_bytes").'='.$subdir{'all'}{'service'}{$s}.'_src.rrd:out_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("all_${s}_src_out_bytes").'='.&getFilename('all','','service_'.$s.'_src.rrd').":out_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("all_${s}_src_out_bits").'='.&cleanDEF("all_${s}_src_out_bytes").',8,*',
-			'DEF:'.&cleanDEF("all_${s}_src_in_bytes").'='.$subdir{'all'}{'service'}{$s}.'_src.rrd:in_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("all_${s}_src_in_bytes").'='.&getFilename('all','','service_'.$s.'_src.rrd').":in_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("all_${s}_src_in_bits").'='.&cleanDEF("all_${s}_src_in_bytes").',8,*',
 			'CDEF:'.&cleanDEF("all_${s}_src_in_bits_neg").'='.&cleanDEF("all_${s}_src_in_bytes").',8,*,-1,*',
-			'DEF:'.&cleanDEF("all_${s}_dst_out_bytes").'='.$subdir{'all'}{'service'}{$s}.'_dst.rrd:out_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("all_${s}_dst_out_bytes").'='.&getFilename('all','','service_'.$s.'_dst.rrd').":out_bytes:AVERAGE",
 			'CDEF:'.&cleanDEF("all_${s}_dst_out_bits").'='.&cleanDEF("all_${s}_dst_out_bytes").',8,*',
-			'DEF:'.&cleanDEF("all_${s}_dst_in_bytes").'='.$subdir{'all'}{'service'}{$s}.'_dst.rrd:in_bytes:AVERAGE',
+			'DEF:'.&cleanDEF("all_${s}_dst_in_bytes").'='.&getFilename('all','','service_'.$s.'_dst.rrd').':in_bytes:AVERAGE',
 			'CDEF:'.&cleanDEF("all_${s}_dst_in_bits").'='.&cleanDEF("all_${s}_dst_in_bytes").',8,*',
 			'CDEF:'.&cleanDEF("all_${s}_dst_in_bits_neg").'='.&cleanDEF("all_${s}_dst_in_bytes").',8,*,-1,*');
 	    } else {
 		push @args, (
-			'DEF:'.&cleanDEF("all_${s}_src_out_${reportType}").'='.$subdir{'all'}{'service'}{$s}."_src.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("all_${s}_src_in_${reportType}").'='.$subdir{'all'}{'service'}{$s}."_src.rrd:in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("all_${s}_src_out_${reportType}").'='.&getFilename('all','','service_'.$s.'_src.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("all_${s}_src_in_${reportType}").'='.&getFilename('all','','service_'.$s.'_src.rrd').":in_${reportType}:AVERAGE",
 			'CDEF:'.&cleanDEF("all_${s}_src_in_${reportType}_neg").'='.&cleanDEF("all_${s}_src_in_${reportType}").',-1,*',
-			'DEF:'.&cleanDEF("all_${s}_dst_out_${reportType}").'='.$subdir{'all'}{'service'}{$s}."_dst.rrd:out_${reportType}:AVERAGE",
-			'DEF:'.&cleanDEF("all_${s}_dst_in_${reportType}").'='.$subdir{'all'}{'service'}{$s}."_dst.rrd:in_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("all_${s}_dst_out_${reportType}").'='.&getFilename('all','','service_'.$s.'_dst.rrd').":out_${reportType}:AVERAGE",
+			'DEF:'.&cleanDEF("all_${s}_dst_in_${reportType}").'='.&getFilename('all','','service_'.$s.'_dst.rrd').":in_${reportType}:AVERAGE",
 			'CDEF:'.&cleanDEF("all_${s}_dst_in_${reportType}_neg").'='.&cleanDEF("all_${s}_dst_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("all_${s}_in_pct").'='.&cleanDEF("all_${s}_src_in_${reportType}").','.&cleanDEF("all_${s}_dst_in_${reportType}").',+,'.&cleanDEF("all_total_in_${reportType}").',/,100,*';
@@ -1120,14 +1140,14 @@ sub io_report {
     $str2 = 'CDEF:'.&cleanDEF("all_other_tos_out_pct").'=100';
     foreach my $t (keys %{$subdir{'all'}{'tos'}} ) {
 	    if( $reportType eq 'bits' ) {
-		push @args, ('DEF:'.&cleanDEF("all_${t}_out_bytes").'='.$subdir{'all'}{'tos'}{$t}.':out_bytes:AVERAGE',
-			     'DEF:'.&cleanDEF("all_${t}_in_bytes").'='.$subdir{'all'}{'tos'}{$t}.':in_bytes:AVERAGE',
+		push @args, ('DEF:'.&cleanDEF("all_${t}_out_bytes").'='.&getFilename('all','','tos_'.$t.'.rrd').":out_bytes:AVERAGE",
+			     'DEF:'.&cleanDEF("all_${t}_in_bytes").'='.&getFilename('all','','tos_'.$t.'.rrd').':in_bytes:AVERAGE',
 			     'CDEF:'.&cleanDEF("all_${t}_out_bits").'='.&cleanDEF("all_${t}_out_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("all_${t}_in_bits").'='.&cleanDEF("all_${t}_in_bytes").',8,*',
 			     'CDEF:'.&cleanDEF("all_${t}_in_bits_neg").'='.&cleanDEF("all_${t}_in_bytes").',8,*,-1,*');
 	    } else {
-		push @args, ('DEF:'.&cleanDEF("all_${t}_out_${reportType}").'='.$subdir{'all'}{'tos'}{$t}.":out_${reportType}:AVERAGE",
-			     'DEF:'.&cleanDEF("all_${t}_in_${reportType}").'='.$subdir{'all'}{'tos'}{$t}.":in_${reportType}:AVERAGE",
+		push @args, ('DEF:'.&cleanDEF("all_${t}_out_${reportType}").'='.&getFilename('all','','tos_'.$t.'.rrd').":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("all_${t}_in_${reportType}").'='.&getFilename('all','','tos_'.$t.'.rrd').":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("all_${t}_in_${reportType}_neg").'='.&cleanDEF("all_${t}_in_${reportType}").',-1,*');
 	    }
 	    push @args, 'CDEF:'.&cleanDEF("all_${t}_in_pct").'='.&cleanDEF("all_${t}_in_${reportType}").','.&cleanDEF("all_total_in_${reportType}").',/,100,*';
@@ -1142,29 +1162,29 @@ sub io_report {
 
 
     # CDEFs for each network
-    $str1 = 'CDEF:'.&cleanDEF("all_other_network_in_pct").'=100';
-    $str2 = 'CDEF:'.&cleanDEF("all_other_network_out_pct").'=100';
-    foreach my $n (keys %{$subdir{'all'}{'network'}} ) {
-	if( $reportType eq 'bits' ) {
-	    push @args, ('DEF:'.&cleanDEF("all_${n}_out_bytes").'='.$subdir{'all'}{'network'}{$n}.':out_bytes:AVERAGE',
-			 'DEF:'.&cleanDEF("all_${n}_in_bytes").'='.$subdir{'all'}{'network'}{$n}.':in_bytes:AVERAGE',
-			 'CDEF:'.&cleanDEF("all_${n}_out_bits").'='.&cleanDEF("all_${n}_out_bytes").',8,*',
-			 'CDEF:'.&cleanDEF("all_${n}_in_bits").'='.&cleanDEF("all_${n}_in_bytes").',8,*',
-			 'CDEF:'.&cleanDEF("all_${n}_in_bits_neg").'='.&cleanDEF("all_${n}_in_bytes").',8,*,-1,*');
-	} else {
-	    push @args, ('DEF:'.&cleanDEF("all_${n}_out_${reportType}").'='.$subdir{'all'}{'network'}{$n}.":out_${reportType}:AVERAGE",
-			 'DEF:'.&cleanDEF("all_${n}_in_${reportType}").'='.$subdir{'all'}{'network'}{$n}.":in_${reportType}:AVERAGE",
-			 'CDEF:'.&cleanDEF("all_${n}_in_${reportType}_neg").'='.&cleanDEF("all_${n}_in_${reportType}").',-1,*');
-	}
-	push @args, 'CDEF:'.&cleanDEF("all_${n}_in_pct").'='.&cleanDEF("all_${n}_in_${reportType}").','.&cleanDEF("all_total_in_${reportType}").',/,100,*';
-	push @args, 'CDEF:'.&cleanDEF("all_${n}_out_pct").'='.&cleanDEF("all_${n}_out_${reportType}").','.&cleanDEF("all_total_out_${reportType}").',/,100,*';
-	$str1 .= ','.&cleanDEF("all_${n}_in_pct").',-';
-	$str2 .= ','.&cleanDEF("all_${n}_out_pct").',-';
-    }
-    if( scalar %{$subdir{'all'}{'network'}} ) {
-    	push @args, $str1;
-    	push @args, $str2;
-    }
+    #$str1 = 'CDEF:'.&cleanDEF("all_other_network_in_pct").'=100';
+    #$str2 = 'CDEF:'.&cleanDEF("all_other_network_out_pct").'=100';
+    #foreach my $n (keys %{$subdir{'all'}{'network'}} ) {
+#	if( $reportType eq 'bits' ) {
+#	    push @args, ('DEF:'.&cleanDEF("all_${n}_out_bytes").'='.$getFilename('network',$n,'all','{'all'}{'network'}{$n}.':out_bytes:AVERAGE',
+#			 'DEF:'.&cleanDEF("all_${n}_in_bytes").'='.$subdir{'all'}{'network'}{$n}.':in_bytes:AVERAGE',
+#			 'CDEF:'.&cleanDEF("all_${n}_out_bits").'='.&cleanDEF("all_${n}_out_bytes").',8,*',
+#			 'CDEF:'.&cleanDEF("all_${n}_in_bits").'='.&cleanDEF("all_${n}_in_bytes").',8,*',
+#			 'CDEF:'.&cleanDEF("all_${n}_in_bits_neg").'='.&cleanDEF("all_${n}_in_bytes").',8,*,-1,*');
+#	} else {
+#	    push @args, ('DEF:'.&cleanDEF("all_${n}_out_${reportType}").'='.$subdir{'all'}{'network'}{$n}.":out_${reportType}:AVERAGE",
+#			 'DEF:'.&cleanDEF("all_${n}_in_${reportType}").'='.$subdir{'all'}{'network'}{$n}.":in_${reportType}:AVERAGE",
+#			 'CDEF:'.&cleanDEF("all_${n}_in_${reportType}_neg").'='.&cleanDEF("all_${n}_in_${reportType}").',-1,*');
+#	}
+#	push @args, 'CDEF:'.&cleanDEF("all_${n}_in_pct").'='.&cleanDEF("all_${n}_in_${reportType}").','.&cleanDEF("all_total_in_${reportType}").',/,100,*';
+#	push @args, 'CDEF:'.&cleanDEF("all_${n}_out_pct").'='.&cleanDEF("all_${n}_out_${reportType}").','.&cleanDEF("all_total_out_${reportType}").',/,100,*';
+#	$str1 .= ','.&cleanDEF("all_${n}_in_pct").',-';
+#	$str2 .= ','.&cleanDEF("all_${n}_out_pct").',-';
+#   }
+#   if( scalar %{$subdir{'all'}{'network'}} ) {
+#    	push @args, $str1;
+#    	push @args, $str2;
+#    }
     # Graph commands
     my $count;
     my $neg;
@@ -1218,7 +1238,7 @@ sub io_report {
 		}
 		if ($direction eq 'in') {            
 			push @args, 'GPRINT:'.&cleanDEF("${type}_${t}_out_pct").':AVERAGE:%.1lf%% Out';
-			push @args, 'GPRINT:'.&cleanDEF("${type}_${t}_in_pct").':AVERAGE:%.1lf%% In\n',
+			push @args, 'GPRINT:'.&cleanDEF("${type}_${t}_in_pct").':AVERAGE:%.1lf%% In\n';
 		}
 	}
 
