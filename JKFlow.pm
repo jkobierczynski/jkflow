@@ -390,6 +390,8 @@ sub parseConfig {
 	if (defined $config->{subnet}{total_subnet}) {
 		$JKFlow::mylist{'total_subnet'} = {};
 	}		
+	use Data::Dumper;
+	print Dumper(%JKFlow::mylist)."\n";
 }
 
 sub pushProtocols {
@@ -549,9 +551,9 @@ sub wanted {
 	if (defined $JKFlow::mylist{'all'}) {
 
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
-		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}});
+		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
     		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        		countmulticasts(\%{$JKFlow::mylist{'all'}});
+        		countmulticasts(\%{$JKFlow::mylist{'all'}},$which);
 		}
 
 	}
@@ -559,11 +561,11 @@ sub wanted {
 	# Counting for specific Routers
 	if (defined $JKFlow::mylist{'router'}{$exporterip}) {
 
-		countpackets(\%{$JKFlow::mylist{'router'}{$exporterip}});
-		countDirections(\%{$JKFlow::mylist{'router'}{$exporterip}{'direction'}});
+		countpackets(\%{$JKFlow::mylist{'router'}{$exporterip}},$which);
+		countDirections(\%{$JKFlow::mylist{'router'}{$exporterip}{'direction'}},$which);
 		#only $dstaddr can be a multicast address 
     		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
-        		countmulticasts(\%{$JKFlow::mylist{'router'}{$exporterip}});
+        		countmulticasts(\%{$JKFlow::mylist{'router'}{$exporterip}},$which);
 		}
 
 	}
@@ -573,14 +575,14 @@ sub wanted {
 	|| ($subnet = $JKFlow::SUBNETS->match_integer($srcaddr))) {
 
 		countpackets(\%{$JKFlow::mylist{'subnet'}{$subnet}},$which);
-		countDirections(\%{$JKFlow::mylist{'subnet'}{$subnet}{'direction'}});
+		countDirections(\%{$JKFlow::mylist{'subnet'}{$subnet}{'direction'}},$which);
 		if ($subnet = $JKFlow::SUBNETS->match_integer($srcaddr)) {
 	    		$which = 'out';
-        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnet}});
+        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnet}},$which);
 		} else {
 			# Do we get directed broadcasts?
 	    		$which = 'in';
-			countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnet}});
+			countmulticasts(\%{$JKFlow::mylist{'subnet'}{$JKFlow::SUBNETS->match_integer($dstaddr)}},$which);
 		}
 	}
 	# Counting Directions for specific Networks
@@ -588,14 +590,17 @@ sub wanted {
 	# the primary intended function of Networks is to be a compound of several
 	# Subnets/Routers
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-		countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
+		countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
 	}
 
+	#use Data::Dumper;
+	#print "Data:".Dumper(%JKFlow::mylist)."\n";
     return 1;
 }
 
 sub countDirections {
 my $ref=shift;
+my $which=shift;
 
 	foreach my $direction (keys %{$ref}) {
 		if ((!defined $ref->{$direction}{'tosubnet'}) && (!defined $ref->{$direction}{'fromsubnet'})) {
@@ -715,6 +720,7 @@ sub countpackets {
 
 sub countmulticasts {
     my $ref = shift;
+    my $which = shift;
     my $typeos;
 	if (defined $ref->{'multicast'}) {
 		$ref->{'multicast'}{'total'}{$which}{'flows'}++;
@@ -817,7 +823,7 @@ sub reporttorrd {
 	foreach my $i ('bytes','pkts','flows') {
 		foreach my $j ('in','out') {
 			if (!(defined($tmp = $ref->{$j}{$i}))) {
-				push(@values, 1);
+				push(@values, 0);
 			} else {
 				push(@values, $tmp);
 				$ref->{$j}{$i}=0;
@@ -839,49 +845,96 @@ sub reporttorrdfiles {
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
  	# Create a new rrd if one doesn't exist
-	
-	$file = $JKFlow::OUTDIR . $dir . "/total.rrd";
-	reporttorrd($self,$file,\%{$ref->{'total'}});
-
-	foreach my $tos ('normal','other') {
-		$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
-		reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}});
- 	}
-
-	$file = $JKFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
-	reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}});
-
-	foreach my $protocol (keys %{$ref->{'protocol'}}) {
-		if (!($tmp = getprotobynumber($protocol))) {
-			$tmp = $protocol;
-		}
-		$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
-		reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}});
+	if (defined $ref->{'total'}) {	
+		$file = $JKFlow::OUTDIR . $dir . "/total.rrd";
+		reporttorrd($self,$file,\%{$ref->{'total'}});
 	}
 
-	foreach my $src ('src','dst') {
-		foreach my $protocol (keys %{$ref->{'service'}}) {
-			foreach my $srv (keys %{$ref->{'service'}{$protocol}}) {
-				if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-					$tmp = $srv;
+	if (defined $ref->{'tos'}) {	
+		foreach my $tos ('normal','other') {
+			$file = $JKFlow::OUTDIR . $dir . "/tos_". $tos . ".rrd";
+			reporttorrd($self,$file,\%{$ref->{'tos'}{$tos}});
+ 		}
+	}
+
+	if (defined $ref->{'multicast'}) {	
+		$file = $JKFlow::OUTDIR . $dir . "/protocol_multicast.rrd";
+		reporttorrd($self,$file,\%{$ref->{'multicast'}{'total'}});
+	}
+
+	if (defined $ref->{'protocol'}) {	
+		foreach my $protocol (keys %{$ref->{'protocol'}}) {
+			if (!($tmp = getprotobynumber($protocol))) {
+				$tmp = $protocol;
+			}
+			$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
+			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}});
+		}
+	}
+
+	if (defined $ref->{'service'}) {	
+		foreach my $src ('src','dst') {
+			foreach my $protocol (keys %{$ref->{'service'}}) {
+				foreach my $srv (keys %{$ref->{'service'}{$protocol}}) {
+					if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
+						$tmp = $srv;
+					}
+					$file = $JKFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
+					reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}});
 				}
-				$file = $JKFlow::OUTDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
-				reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}});
 			}
 		}
 	}
 
-    if (defined $ref->{'direction'}) {
-	foreach my $direction (keys %{$ref->{'direction'}}) {
-		foreach my $src ('src','dst') { 
-			foreach my $application (keys %{$ref->{'direction'}{$direction}{'application'}}) {
-	        		$file = $JKFlow::OUTDIR. $dir . "/service_" . $direction . "_" . $application . "_" . $src . ".rrd";
-				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'application'}{$application}{$src}});
+	if (defined $ref->{'direction'}) {
+		foreach my $direction (keys %{$ref->{'direction'}}) {
+			foreach my $src ('src','dst') { 
+				foreach my $application (keys %{$ref->{'direction'}{$direction}{'application'}}) {
+	        			$file = $JKFlow::OUTDIR. $dir . "/service_" . $direction . "_" . $application . "_" . $src . ".rrd";
+					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'application'}{$application}{$src}});
+				}
+			}
+    			#reporttorrdfiles($self, $dir,\%{$reference->{'direction'}{$direction}});
+			if (defined $ref->{'direction'}{$direction}{'total'}) {	
+				$file = $JKFlow::OUTDIR . $dir . "/tos_total_" . $direction . ".rrd";
+				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'total'}});
+			}
+
+			if (defined $ref->{'direction'}{$direction}{'tos'}) {	
+				foreach my $tos ('normal','other') {
+					$file = $JKFlow::OUTDIR . $dir . "/tos_" . $direction . "_" . $tos . ".rrd";
+					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'tos'}{$tos}});
+ 				}
+			}
+
+			if (defined $ref->{'direction'}{$direction}{'multicast'}) {	
+				$file = $JKFlow::OUTDIR . $dir . "/protocol_" . $direction . "_multicast.rrd";
+				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'multicast'}{'total'}});
+			}
+
+			if (defined $ref->{'direction'}{$direction}{'protocol'}) {	
+				foreach my $protocol (keys %{$ref->{'direction'}{$direction}{'protocol'}}) {
+					if (!($tmp = getprotobynumber($protocol))) {
+						$tmp = $protocol;
+					}
+					$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $direction . "_" . $tmp . ".rrd";
+					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'protocol'}{$protocol}{'total'}});
+				}
+			}
+
+			if (defined $ref->{'direction'}{$direction}{'service'}) {	
+				foreach my $src ('src','dst') {
+					foreach my $protocol (keys %{$ref->{'direction'}{$direction}{'service'}}) {
+						foreach my $srv (keys %{$ref->{'direction'}{$direction}{'service'}{$protocol}}) {
+							if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
+								$tmp = $srv;
+							}
+						}
+   	 				}
+				}
 			}
 		}
-    		#reporttorrdfiles($self, $dir,\%{$reference->{'direction'}{$direction}});
 	}
-    }
 }
 
 sub report {
@@ -914,8 +967,8 @@ sub report {
 		}
 	}  
 	
-	use Data::Dumper;
-	print "Data:".Dumper(%JKFlow::mylist)."\n";
+	#use Data::Dumper;
+	#print "Data:".Dumper(%JKFlow::mylist)."\n";
 	reporttorrdfiles($self,"",\%JKFlow::mylist);
 
 	if (! -d $JKFlow::OUTDIR."/total_router" ) {
