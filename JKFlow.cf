@@ -18,8 +18,8 @@ Subnet 10.101.249.0/24 137-139/tcp,137-139/udp,www/tcp,102/tcp
 # Consilidate countings on subnets and/or routers 
 # Syntax: Network <name> [exporter name|subnet],...
 
-Network belgium 10.240.72.0/22,10.101.249.0/24,10.101.249.2
-Network nederland 10.102.12.0/24,10.101.249.3
+Network belgium 10.240.72.0/22,10.101.249.0/24
+Network nederland 10.240.72.0/22,10.101.249.0/24
 
 # Total Network Summarisations
 Network total_subnet

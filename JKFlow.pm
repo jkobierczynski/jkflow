@@ -530,8 +530,8 @@ sub parseConfig {
     }
 
     close(FH);
-    use Data::Dumper;
-    print Dumper($JKFlow::myalllist{'network'});
+    #use Data::Dumper;
+    #print Dumper($JKFlow::myalllist{'network'});
 }
 
 sub new {
@@ -886,8 +886,8 @@ sub report {
         print "Summarize $network, $subnet \n";
       		summarize(\%{$JKFlow::myalllist{'network'}{$network}},\%{$JKFlow::mysubnetlist{'subnet'}{$subnet}});
     	}
-        use Data::Dumper;
-        print Dumper(\%{$JKFlow::myalllist{'network'}{$network}});
+        #use Data::Dumper;
+        #print Dumper(\%{$JKFlow::myalllist{'network'}{$network}});
     }  
 
     reporttorrdfiles($self,"",\%JKFlow::myalllist);
