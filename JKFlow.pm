@@ -146,8 +146,6 @@ sub parseConfig {
 		} else {
 			$JKFlow::mylist{all}{samplerate}=1;
 		}
-		use Data::Dumper;
-		print Dumper(%{$config});
 		parseDirection (
 			\%{$config->{all}},
 			\%{$JKFlow::mylist{all}});
@@ -256,61 +254,12 @@ sub parseConfig {
 	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
 	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
 	
-	if (defined $config->{router}{total_router}) {
-		$JKFlow::mylist{'total_router'} = {};
-	}	
-	use Data::Dumper;
-	print Dumper($JKFlow::mylist{all});
 }
 
 sub parseDirection {
 my $refxml=shift;
 my $ref=shift;
 
-		pushServices(
-			$refxml->{services},
-			\%{$ref->{service}});
-		pushProtocols(
-			$refxml->{protocols},
-			\%{$ref->{protocol}});
-		if (defined $refxml->{direction}) { 
-			$ref->{direction}={};
-			pushDirections(
-				$refxml->{direction},
-				\%{$ref->{direction}});
-
-		}
-		if (defined $refxml->{application}) { 
-			$ref->{application}={};
-			pushApplications( 
-				$refxml->{application},
-				\%{$ref->{application}});
-		}
-		if (defined $refxml->{ftp}) {
-			$ref->{ftp}={};
-		}
-		if (defined $refxml->{multicast}) {
-			$ref->{multicast}={};
-		}
-		if (defined $refxml->{tos}) {
-			$ref->{tos}={};
-		}
-		if (defined $refxml->{total}) {
-			$ref->{total}={};
-		}
-		if (defined $refxml->{scoreboard}) {
-			if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts}=="1") {
-				$ref->{scoreboard}{hosts}={};
-			}
-			if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1") {
-				$ref->{scoreboard}{ports}={};
-			}
-		}
-		if (defined $refxml->{write}) {
-			$ref->{write}=$refxml->{write};
- 		} else {
-			$ref->{write}="yes";
-		}
 		if (defined $refxml->{set}) {
 			foreach my $set (keys %{$refxml->{set}}) {
 				print "parseDirection: ".$set."\n";
@@ -319,6 +268,56 @@ my $ref=shift;
 					$ref);
 			}
 		}
+		pushServices(
+			$refxml->{services},
+			\%{$ref->{service}});
+		pushProtocols(
+			$refxml->{protocols},
+			\%{$ref->{protocol}});
+		if (defined $refxml->{direction}) { 
+			if (!defined $ref->{direction}) {
+				$ref->{direction}={};
+			}
+			pushDirections(
+				$refxml->{direction},
+				\%{$ref->{direction}});
+
+		}
+		if (defined $refxml->{application}) { 
+			if (!defined $ref->{application}) {
+				$ref->{application}={};
+			}
+			pushApplications( 
+				$refxml->{application},
+				\%{$ref->{application}});
+		}
+		if (defined $refxml->{ftp} && !defined $ref->{ftp}) {
+			$ref->{ftp}={};
+		}
+		if (defined $refxml->{multicast} && !defined $ref->{multicast}) {
+			$ref->{multicast}={};
+		}
+		if (defined $refxml->{tos} && !defined $ref->{tos}) {
+			$ref->{tos}={};
+		}
+		if (defined $refxml->{total} && !defined $ref->{total}) {
+			$ref->{total}={};
+		}
+		if (defined $refxml->{scoreboard}) {
+			if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
+				$ref->{scoreboard}{hosts}={};
+			}
+			if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
+				$ref->{scoreboard}{ports}={};
+			}
+		}
+		if (defined $refxml->{write}) {
+			$ref->{write}=$refxml->{write};
+ 		} else {
+			$ref->{write}="yes";
+		}
+		#use Data::Dumper;
+		#print Dumper($ref);
 }
 
 sub pushProtocols {
