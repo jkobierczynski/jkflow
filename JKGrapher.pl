@@ -115,6 +115,7 @@ my %definedcolors =	(
 			'tcp_iso_tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_smtp' => 		{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_nntp' =>		{src => 0xC09010, dst => 0xD0A040 }, # Brown
+			'other' => 		{src => 0xA0A0A0, dst => 0xA0A0A0 }, # Gray
 			'total' => 		{src => 0x00000F } # Black
 );
 

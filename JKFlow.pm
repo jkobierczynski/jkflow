@@ -210,7 +210,10 @@ my $ref=shift;
 	}
 	pushServices(
 		$refxml->{services},
-		\%{$ref->{service}});
+		\%{$ref});
+	if (defined $refxml->{other} && !defined $ref->{other}) {
+		$ref->{application}{other}={};
+	}
 	pushProtocols(
 		$refxml->{protocols},
 		\%{$ref->{protocol}});
@@ -228,7 +231,7 @@ my $ref=shift;
 		}
 		pushApplications(
 			$refxml->{application},
-			\%{$ref->{application}});
+			\%{$ref});
 	}
 	if (defined $refxml->{ftp} && !defined $ref->{ftp}) {
 		$ref->{ftp}={};
@@ -287,14 +290,16 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				die "Bad range $start - $end on line $.\n" if
 					($end < $start);
 				for($i=$start;$i<=$end;$i++) {
-					$ref->{$proto}{$i} = {};
+					$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($i,getprotobynumber($proto))} = {};
+					$ref->{'service'}{$proto}{$i} = \%{$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($i,getprotobynumber($proto))}};
 				}
 			} else {
 				if ($srv !~ /\d+/) {
 					$tmp = getservbyname($srv, getprotobynumber($proto)) || die "Unknown service $srv on line $.\n";
 					$srv = $tmp;
 				}
-				$ref->{$proto}{$srv} = {};
+				$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($srv,getprotobynumber($proto))} = {};
+				$ref->{'service'}{$proto}{$srv} = \%{$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($srv,getprotobynumber($proto))}};
 			}
 		} else {
 			die "Bad Service Item $current on line $.\n";
@@ -307,6 +312,7 @@ my $refxml=shift;
 my $ref=shift;
 my ($srv,$proto,$start,$end,$tmp,$i);
 	foreach my $application (keys %{$refxml}) {
+		$ref->{'application'}{$application} = {};
 		foreach my $current (split(/,/,$refxml->{$application}{'content'})) {
 			if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
 				$srv = $1;
@@ -322,14 +328,14 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 					die "Bad range $start - $end on line $.\n" if
 						($end < $start);
 					for($i=$start;$i<=$end;$i++) {
-						$ref->{$application}{'service'}{$proto}{$i} = {};
+						$ref->{'service'}{$proto}{$i} = \%{$ref->{'application'}{$application}};
 					}
 				} else {
 					if ($srv !~ /\d+/) {
 						$tmp = getservbyname($srv, getprotobynumber($proto)) || die "Unknown service $srv on line $.\n";
 						$srv = $tmp;
 					}
-					$ref->{$application}{'service'}{$proto}{$srv} = {};
+					$ref->{'service'}{$proto}{$srv} = \%{$ref->{'application'}{$application}};
 				}
 			} else {
 				die "Bad Service Item $current on line $.\n";
@@ -809,6 +815,7 @@ sub generateCountPackets {
 	} else {
 		$typeos="other";
 	}
+
 ';
 
 	if (defined $ref->{'total'}) {
@@ -854,15 +861,27 @@ EOF
 	if (defined $ref->{'service'}) {
 	$countpackets.= <<'EOF';
 	if (defined $ref->{'service'}{$protocol}) {
-		if (defined $ref->{'service'}{$protocol}{$dstport}) {
-			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
-			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
-			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} += $pkts;
-		}
-		elsif (defined $ref->{'service'}{$protocol}{$srcport}) {
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
+		my $application;
+		if (defined ($application=$ref->{'service'}{$protocol}{$dstport})) {
+			$application->{'dst'}{$which}{'flows'}++;
+			$application->{'dst'}{$which}{'bytes'} += $bytes;
+			$application->{'dst'}{$which}{'pkts'} += $pkts;
+		} elsif (defined ($application=$ref->{'service'}{$protocol}{$srcport})) {
+			$application->{'src'}{$which}{'flows'}++;
+			$application->{'src'}{$which}{'bytes'} += $bytes;
+			$application->{'src'}{$which}{'pkts'} += $pkts;
+EOF
+	}
+	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'}) {
+	$countpackets.= <<'EOF';
+		} else {
+			$ref->{'application'}{'other'}{'dst'}{$which}{'flows'}++;
+			$ref->{'application'}{'other'}{'dst'}{$which}{'bytes'} += $bytes;
+			$ref->{'application'}{'other'}{'dst'}{$which}{'pkts'} += $pkts;
+EOF
+	}
+	if (defined $ref->{'service'}) {
+	$countpackets.= <<'EOF';
 		}
 	}
 
@@ -872,27 +891,6 @@ EOF
 	if (defined $ref->{'ftp'}) {
 	$countpackets.= <<'EOF';
 	countftp(\%{$ref->{'ftp'}},$which);
-
-EOF
-	}
-
-	if (defined $ref->{'application'}) {
-	$countpackets.= <<'EOF';
-	foreach my $application (keys %{$ref->{'application'}}) {
-		if (		(defined $ref->{'application'}{$application}{'service'})
-			&& 	(defined $ref->{'application'}{$application}{'service'}{$protocol})) {
-			if (defined $ref->{'application'}{$application}{'service'}{$protocol}{$dstport}) {
-				$ref->{'application'}{$application}{'dst'}{$which}{'flows'}++;
-				$ref->{'application'}{$application}{'dst'}{$which}{'bytes'} += $bytes;
-				$ref->{'application'}{$application}{'dst'}{$which}{'pkts'} += $pkts;
-			}
-			elsif (defined $ref->{'application'}{$application}{'service'}{$protocol}{$srcport}) {
-				$ref->{'application'}{$application}{'src'}{$which}{'flows'}++;
-				$ref->{'application'}{$application}{'src'}{$which}{'bytes'} += $bytes;
-				$ref->{'application'}{$application}{'src'}{$which}{'pkts'} += $pkts;
-			}
-		}
-	}
 
 EOF
 	}
@@ -1061,20 +1059,6 @@ sub reporttorrdfiles {
 			}
 			$file = $JKFlow::RRDDIR. $dir . "/protocol_" . $tmp . ".rrd";
 			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
-		}
-	}
-
-	if (defined $ref->{'service'}) {	
-		foreach my $src ('src','dst') {
-			foreach my $protocol (keys %{$ref->{'service'}}) {
-				foreach my $srv (keys %{$ref->{'service'}{$protocol}}) {
-					if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-						$tmp = $srv;
-					}
-					$file = $JKFlow::RRDDIR. $dir . "/service_" . getprotobynumber($protocol). "_". $tmp . "_" . $src . ".rrd";
-					reporttorrd($self,$file,\%{$ref->{'service'}{$protocol}{$srv}{$src}},$samplerate);
-				}
-			}
 		}
 	}
 
