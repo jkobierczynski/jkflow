@@ -538,29 +538,54 @@ my ($srv,$proto,$start,$end,$tmp,$i,$subnet);
 		foreach $subnet (@{$refxml->{'subnet'}}) {
 
 
-			if (defined $subnet->{'nosubnets'}) { 
-				foreach my $nosubnet (split /,/, $subnet->{'nosubnets'}) {
-					my @list = ();
-					if (defined $ref->match_string($nosubnet)) {
-						my @list = @{$ref->match_string($nosubnet)};
-					}
-					print "PUSH NOSUBNET:".$nosubnet."\n";
-					$ref->add_string($nosubnet,\@list);
-				}
-			}
+			#if (defined $subnet->{'nosubnets'}) { 
+			#	foreach my $nosubnet (split /,/, $subnet->{'nosubnets'}) {
+			#		my @list = ();
+			#		if (defined $ref->match_string($nosubnet)) {
+			#			my @list = @{$ref->match_string($nosubnet)};
+			#		}
+			#		use Data::Dumper;
+			#		print "PUSH NOSUBNET:".$nosubnet." = ".Dumper(@list). "\n";
+			#		$ref->add_string($nosubnet,\@list);
+			#	}
+			#}
 
 			foreach my $addsubnet (split /,/, $subnet->{'subnets'}) {
 				my %seen = ();
 				my @list = ();
+				my (@includelist,@excludelist);
 				if (defined $ref->match_string($addsubnet)) {
-					my @tmplist = @{$ref->match_string($addsubnet)};
-					if (defined $tmplist[0]) {
-						push @list,  @tmplist;
+					use Data::Dumper;
+					print "READ SUBNET:".Dumper($ref->match_string($addsubnet))."\n";
+					@includedlist = @{${$ref->match_string($addsubnet)}{included}};
+					@excludedlist = @{${$ref->match_string($addsubnet)}{excluded}};
+					if (defined $includedlist[0]) {
+						push @list,  @includedlist;
 					}
 				}
 				@list = grep { ! $seen{$_} ++ } ( @list, $addsubnet );
-				print "PUSH SUBNET:".$addsubnet."\n";
-				$ref->add_string($addsubnet,\@list);
+				use Data::Dumper;
+				print "PUSH SUBNET:".$addsubnet." = ".Dumper({included=>\@list,excluded=>\@excludedlist})."\n";
+				$ref->add_string($addsubnet,{included=>\@list,excluded=>\@excludedlist});
+			}
+			
+			foreach my $addsubnet (split /,/, $subnet->{'nosubnets'}) {
+				my %seen = ();
+				my @list = ();
+				my (@includelist,@excludelist);
+				if (defined $ref->match_string($addsubnet)) {
+					use Data::Dumper;
+					print "READ NOSUBNET:".Dumper($ref->match_string($addsubnet))."\n";
+					@includedlist = @{${$ref->match_string($addsubnet)}{included}};
+					@excludedlist = @{${$ref->match_string($addsubnet)}{excluded}};
+					if (defined $excludedlist[0]) {
+						push @list,  @excludedlist;
+					}
+				}
+				@list = grep { ! $seen{$_} ++ } ( @list, $addsubnet );
+				use Data::Dumper;
+				print "PUSH NOSUBNET:".$addsubnet." = ".Dumper({included=>\@includedlist,excluded=>\@list})."\n";
+				$ref->add_string($addsubnet,{included=>\@includedlist,excluded=>\@list});
 			}
 			pushDirections2($subnet,$ref);
 		}
@@ -693,8 +718,15 @@ sub countDirections2 {
 
 	my $srcsubnets;
 	my $dstsubnets;
-	if (defined ($srcsubnets = $JKFlow::fromtrie->match_integer($srcaddr))) {
-		if (defined ($dstsubnets = $JKFlow::totrie->match_integer($dstaddr))) {
+	
+	my %fromtriematch;
+	my %totriematch;
+
+	my $fromtriematch = $JKFlow::fromtrie->match_integer($srcaddr);
+	my $totriematch = $JKFlow::totrie->match_integer($dstaddr);
+
+	if ((defined $fromtriematch) && (defined ($srcsubnets = $fromtriematch->{included}))) {
+		if ((defined $totriematch) && (defined ($dstsubnets = $totriematch->{included}))) {
 			foreach my $srcsubnet (@{$srcsubnets}) {
 				foreach my $dstsubnet (@{$dstsubnets}) {
 					if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}) {
@@ -709,8 +741,11 @@ sub countDirections2 {
 		}
 	}
 
-        if (defined ($dstsubnets = $JKFlow::fromtrie->match_integer($dstaddr))) {
-        	if (defined ($srcsubnets = $JKFlow::totrie->match_integer($srcaddr))) {
+	$fromtriematch = $JKFlow::fromtrie->match_integer($dstaddr);
+	$totriematch = $JKFlow::totrie->match_integer($srcaddr);
+        
+	if ((defined $fromtriematch) && (defined ($dstsubnets = $fromtriematch->{included}))) {
+        	if ((defined $totriematch) && (defined ($srcsubnets = $totriematch->{included}))) {
         		foreach my $dstsubnet (@{$dstsubnets}) {
                 		foreach my $srcsubnet (@{$srcsubnets}) {
 					if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}) {
