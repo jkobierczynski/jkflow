@@ -1,4 +1,4 @@
-#! /usr/local/bin/perl -w
+#! /usr/bin/perl -w
 
 # CUGrapher.pl
 # $Revision$
@@ -54,8 +54,9 @@ my $debug;
 
 &getRouter();
 &getSubnet();
-&getProtocols("all","");
-&getServices("all","");
+&getProtocols("","");
+&getServices("","");
+&getTOS("","");
     foreach my $r (@router) {
 	 &getProtocols($r,"router_");
     }
@@ -68,7 +69,12 @@ my $debug;
     foreach my $r (@subnet) {
 	 &getServices($r,"subnet_");
     }
-&getTOS();
+    foreach my $r (@router) {
+	 &getTOS($r,"router_");
+    }
+    foreach my $r (@subnet) {
+	 &getTOS($r,"subnet_");
+    }
 &getNetworks();
 &getImageType();
 &setColors();
@@ -130,10 +136,15 @@ sub showMenu {
     
     my %hours = ( 6 => '6 hours',
     		  12 => '12 hours',
-    		  24 => '24 hours',
-		  36 => '36 hours',
-		  48 => '48 hours',
+    		  24 => '1 day',
+		  36 => '1,5 days',
+		  48 => '2 days',
+		  72 => '3 days',
+		  96 => '4 days',
+		  120 => '5 days',
 		  168 => '1 week',
+		  336 => '2 weeks',
+		  504 => '3 weeks',
 		  720 => '1 month' );
 
     print $q->td( { -align => 'right' },
@@ -174,60 +185,63 @@ sub showMenu {
     print $q->end_Tr();
 
     print $q->end_table();
+    
+    print $q->center( $q->submit( -name => '',
+				  -value => 'Generate graph' ) );
 
     print $q->start_table( { align => 'center',
 			     -border => '1' } );
 
-#    print $q->Tr( { -align => 'center' },
-#		  $q->td( i('Global') ),
-#		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
-#		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
-#		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
-#		  $q->td( i('Network') ),
-#		  $q->td( i('Total') ) );    
-#
-#    print $q->start_Tr;
-#
-#    print $q->td( { -align => 'center' }, "All",
-#		      $q->hidden( -name => 'router', -default => "all" ) );
-#
-#    print $q->td( $q->scrolling_list( -name => "all_protocol",
-#				      -values => [sort &getProtocolList("")],
-#				      -size => 5,
-#				      -multiple => 'true' ) );
-#
-#    print $q->td( $q->checkbox( -name => "all_all_protocols",
-#				-value => '1',
-#				-label => 'Yes' ) );
-#	
-#    print $q->td( $q->scrolling_list( -name => "all_service",
-#				      -values => [sort &getServiceList("")],
-#				      -size => 5,
-#				      -multiple => 'true' ) );
-#
-#    print $q->td( $q->checkbox( -name => "all_all_services",
-#				-value => '1',
-#				-label => 'Yes' ) );
-#
-#    print $q->td( $q->scrolling_list( -name => "all_tos",
-#				      -values => [sort &getTOSList("")],
-#			              -size => 5,
-#				      -multiple => 'true' ) );
-#
-#    print $q->td( $q->checkbox( -name => "all_all_tos",
-#				-value => '1',
-#				-label => 'Yes' ) );
-#
-#    print $q->td( $q->scrolling_list( -name => "all_network",
-#				      -values => [sort &getNetworkList()],
-#				      -size => 5,
-#			              -multiple => 'true' ) );
-#	
-#    print $q->td( $q->checkbox( -name => "all_total",
-#				    -value => '1',
-#				    -label => 'Yes') );
-#	
-#    print $q->end_Tr;
+    print $q->Tr( { -align => 'center' },
+		  $q->td( i('Global') ),
+		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
+		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
+		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
+		  $q->td( i('Network') ),
+		  $q->td( i('Total') ) );    
+
+    print $q->start_Tr;
+
+    print $q->td( { -align => 'center' }, "All",
+		      $q->hidden( -name => 'router', -default => "all" ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_protocol",
+				      -values => [sort &getProtocolList("")],
+				      -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_protocols",
+				-value => '1',
+				-label => 'Yes' ) );
+	
+    print $q->td( $q->scrolling_list( -name => "all_service",
+				      -values => [sort &getServiceList("")],
+				      -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_services",
+				-value => '1',
+				-label => 'Yes' ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_tos",
+				      -values => [sort &getTOSList("")],
+			              -size => 5,
+				      -multiple => 'true' ) );
+
+    print $q->td( $q->checkbox( -name => "all_all_tos",
+				-value => '1',
+				-label => 'Yes' ) );
+
+    print $q->td( $q->scrolling_list( -name => "all_network",
+				      -values => [sort &getNetworkList()],
+				      -size => 5,
+			              -multiple => 'true' ) );
+	
+    print $q->td( $q->checkbox( -name => "all_total",
+				    -value => '1',
+				    -label => 'Yes') );
+	
+    print $q->end_Tr;
 
     print $q->Tr( { -align => 'center' },
 		  $q->td( i('Routers') ),
@@ -467,7 +481,7 @@ sub getProtocols {
     my $r=shift;
     my $type=shift;
 #    foreach my $r (@router) {
-        if( $r == "all" && param("all_all_protocols") ) {
+        if( $r eq "all" && param("all_all_protocols") ) {
 	    push @{$protocol{$r}}, &getProtocolList("");
 	}
       	elsif( param("${r}_all_protocols") ) {
@@ -499,7 +513,7 @@ sub getServices {
     my $r=shift;
     my $type=shift;
 #    foreach my $r (@router) {
-        if( $r == "all" && param("all_all_protocols") ) {
+        if( $r eq "all" && param("all_all_protocols") ) {
 	    push @{$protocol{$r}}, &getProtocolList("");
 	}
 	if( param("${r}_all_services") ) {
@@ -570,30 +584,41 @@ sub getNetworks {
 sub setColors {
     # "nice" colors. taken from Packeteer PacketShaper's web interface
     # (via Dave Plonka) and other places
-    my @safe_colors = ( 0xFF0000, 
-			0x00FF00,
-			0x0000FF,
-			0xFF00FF,
-			0xFFFF00,
-			0x00FFFF,
-			0x808080,
-  			0xB8860B, # dark goldenrod
+    my @double_colors = ( 0xFF0000, # Red  
 			0xFF6060,
+			0x00FF00, # Green 
 			0x60FF60,
-			0x993399, # maroon
-			0x746FAE, # lavender
-  			0xB8860B, # dark goldenrod
-  			0xCCFFFF, # lt. cyan
-  			0x660066, # purple
-  			0xFF6666, # orange
-  			0x0066CC, # med. blue
-  			0xCCCCFF, # pale lavender
-  			0x000066, # dk. blue
-  			0x0000FF, # blue
-  			0xFFFF00 # yellow
+			0x0000FF, # Blue
+			0x6060FF,
+			0xFFFF00, # Yellow
+			0xFFFF90,
+			0x808080, # Gray
+  			0xA0A0A0, 
+			0x993399, # Purple
+			0xAA77AA, 
+  			0xC09010, # Brown
+  			0xD0B030, 
+			0x645F9E, # Lavendel
+  			0x8477BE, 
+			0x000000, # Black
+			0x404040, 
+			0x709000, # Kaki
+			0x90A000,
+		        0x00D0D0, # Cyaan
+		        0x80F0F0,
   			);
+    
+   my @safe_colors = ( 0xFF0000, # Red  
+			0x00FF00, # Green 
+			0x0000FF, # Blue
+			0xFFFF00, # Yellow
+			0x808080, # Gray
+			0x993399, # Purple
+  			0xC09010, # Brown
+			0x746FAE, # lavender
+		        );
 
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	foreach my $n (@{$network{$r}}) {
 	    $color{$r}{$n} = &iterateColor(\@safe_colors);
 	}
@@ -603,8 +628,8 @@ sub setColors {
 	}
 	
 	foreach my $s (@{$service{$r}}) {
-	    $color{$r}{$s}{'src'} = &iterateColor(\@safe_colors);
-	    $color{$r}{$s}{'dst'} = &iterateColor(\@safe_colors);
+	    $color{$r}{$s}{'src'} = &iterateColor(\@double_colors);
+	    $color{$r}{$s}{'dst'} = &iterateColor(\@double_colors);
 	}
 
 	foreach my $t (@{$tos{$r}}) {
@@ -969,6 +994,7 @@ sub io_report {
 	# service outbound, percentages
 	foreach my $s ( @{$service{$r}} ) {
 	    $count++;
+            #push @args, "Service $r @{$service{$r}}\n";
 	    if( $count == 1 ) {
 		push @args, 'AREA:'.&cleanDEF("${r}_${s}_src_out_".$reportType).$color{$r}{$s}{'src'}.':'.&cleanServiceLabel($s, ' src  +');
 	    } else {
@@ -982,6 +1008,7 @@ sub io_report {
 	# protocol outbound, percentages
 	foreach my $p ( @{$protocol{$r}} ) {
 	    $count++;
+            #push @args, "Protocol $r @{$protocol{$r}}\n";
 	    if( $count == 1 ) {
 		push @args, 'AREA:'.&cleanDEF("${r}_${p}_out_".$reportType).$color{$r}{$p}.':'.&cleanProtocolLabel($p);
 	    } else {
@@ -994,6 +1021,7 @@ sub io_report {
 	# tos outbound, percentages
 	foreach my $t ( @{$tos{$r}} ) {
 	    $count++;
+            #push @args, "TOS $r @{$tos{$r}}\n";
 	    if( $count == 1 ) {
 		push @args, 'AREA:'.&cleanDEF("${r}_${t}_out_".$reportType).$color{$r}{$t}.':'.&cleanProtocolLabel($t);
 	    } else {
