@@ -131,10 +131,18 @@ sub parseConfig {
 		pushProtocols(
 			$config->{all}{protocols},
 			\%{$JKFlow::mylist{'all'}{'protocol'}});
-		pushDirections(
-			$config->{all}{direction},
-			\%{$JKFlow::mylist{'all'}{'direction'}});
-
+		if (defined $config->{all}{direction}) { 
+			$JKFlow::mylist{'all'}{'direction'}={};
+			pushDirections(
+				$config->{all}{direction},
+				\%{$JKFlow::mylist{'all'}{'direction'}});
+		}
+		if (defined $config->{all}{application}) { 
+			$JKFlow::mylist{'all'}{'application'}={};
+			pushApplications( 
+				$config->{all}{application},
+				\%{$JKFlow::mylist{'all'}{'application'}});
+		}
 		if (defined $config->{all}{multicast}) {
 			$JKFlow::mylist{'all'}{'multicast'}={};
 		}
@@ -164,10 +172,18 @@ sub parseConfig {
 		pushProtocols(
 			$config->{routers}{router}{$routername}{protocols},
 			\%{$JKFlow::mylist{'router'}{$routername}{'protocol'}});
-		pushDirections(
-			$config->{routers}{router}{$routername}{direction},
-			\%{$JKFlow::mylist{'router'}{$routername}{'direction'}});
-
+		if (defined $config->{routers}{router}{$routername}{direction}) { 
+			$JKFlow::mylist{'router'}{$routername}{'direction'}={};
+			pushDirections(
+				$config->{routers}{router}{$routername}{direction},
+				\%{$JKFlow::mylist{'router'}{$routername}{'direction'}});
+		}
+		if (defined $config->{routers}{router}{$routername}{application}) { 
+			$JKFlow::mylist{'router'}{$routername}{'application'}={};
+			pushApplications( 
+				$config->{routers}{router}{$routername}{application},
+				\%{$JKFlow::mylist{'router'}{$routername}{'application'}});
+		}
 		if (defined $config->{routers}{router}{$routername}{multicast}) {
 			$JKFlow::mylist{'router'}{$routername}{'multicast'}={};
 		}
@@ -198,10 +214,18 @@ sub parseConfig {
 		pushProtocols(
 			$config->{subnets}{subnet}{$subnetname}{protocols},
 			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'protocol'}});
-		pushDirections(
-			$config->{subnets}{subnet}{$subnetname}{direction},
-			\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}});
-
+		if (defined $config->{subnets}{subnet}{$subnetname}{direction}) { 
+			$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}={};
+			pushDirections(
+				$config->{subnets}{subnet}{$subnetname}{direction},
+				\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}});
+		}
+		if (defined $config->{subnets}{subnet}{$subnetname}{application}) { 
+			$JKFlow::mylist{'subnet'}{$subnetname}{'application'}={};
+			pushApplications( 
+				$config->{subnets}{subnet}{$subnetname}{application},
+				\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}});
+		}
 		if (defined $config->{subnets}{subnet}{$subnetname}{multicast}) {
 			$JKFlow::mylist{'subnet'}{$subnetname}{'multicast'}={};
 		}
@@ -219,11 +243,12 @@ sub parseConfig {
 	}
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
-
-		pushDirections(
-			$config->{networks}{network}{$network}{direction},
-			\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
-
+		if (defined $config->{netwerks}{network}{$network}{direction}) { 
+			$JKFlow::mylist{'netwerk'}{$network}{'direction'}={};
+			pushDirections(
+				$config->{networks}{network}{$network}{direction},
+				\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
+		}
 		if (defined $config->{networks}{network}{$network}{routers}) {
 			foreach my $router (split(/,/,$config->{networks}{network}{$network}{routers})) {
 				$JKFlow::mylist{'network'}{$network}{'router'}{$router}={};
@@ -243,6 +268,9 @@ sub parseConfig {
 	if (defined $config->{subnet}{total_subnet}) {
 		$JKFlow::mylist{'total_subnet'} = {};
 	}		
+	#use Data::Dumper;
+	#print "Data:".Dumper(%JKFlow::mylist)."\n";
+	#print "Data:".Dumper($config)."\n";
 }
 
 sub pushProtocols {
@@ -295,37 +323,12 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 	}
 }
 
-sub pushDirections {
+sub pushApplications {
 my $refxml=shift;
 my $ref=shift;
 my ($srv,$proto,$start,$end,$tmp,$i);
-
-	#use Data::Dumper;
-	#print "refxml=".Dumper($refxml)."\n";
-	#print "ref=".Dumper($ref)."\n";
-	if (! defined $refxml->{'name'}) {
-		$refxml->{'name'}="default";
-	}
-	if (defined $refxml->{'fromsubnets'}) {
-		${$ref->{$refxml->{'name'}}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		foreach my $subnet (split(/,/,$refxml->{'fromsubnets'})) {
-			print "Adding subnet $subnet \n";
-			${$ref->{$refxml->{'name'}}{'fromsubnets'}}->add_string($subnet);
-		}
-	#	$ref->{$refxml->{'name'}}{'fromsubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
-	#	$ref->{$refxml->{'name'}}{'fromsubnet'}->add_string($refxml->{'fromsubnet'});
-	}
-	if (defined $refxml->{'tosubnets'}) { 
-		${$ref->{$refxml->{'name'}}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		foreach my $subnet (split(/,/,$refxml->{'tosubnets'})) {
-			print "Adding subnet $subnet \n";
-			${$ref->{$refxml->{'name'}}{'tosubnets'}}->add_string($subnet);
-		}
-		#$ref->{$refxml->{'name'}}{'tosubnet'}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		#$ref->{$refxml->{'name'}}{'tosubnet'}->add_string($refxml->{'tosubnet'});
-	}
-	foreach my $application (keys %{$refxml->{'application'}}) {
-		foreach my $current (split(/,/,$refxml->{'application'}{$application}{'content'})) {
+	foreach my $application (keys %{$refxml}) {
+		foreach my $current (split(/,/,$refxml->{$application}{'content'})) {
 			if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
 				$srv = $1;
 				$proto = $2;
@@ -340,47 +343,83 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 					die "Bad range $start - $end on line $.\n" if
 						($end < $start);
 					for($i=$start;$i<=$end;$i++) {
-						$ref->{$refxml->{'name'}}{'application'}{$application}{'service'}{$proto}{$i} = {};
+						$ref->{$application}{'service'}{$proto}{$i} = {};
 					}
 				} else {
 					if ($srv !~ /\d+/) {
 						$tmp = getservbyname($srv, getprotobynumber($proto)) || die "Unknown service $srv on line $.\n";
 						$srv = $tmp;
 					}
-					$ref->{$refxml->{'name'}}{'application'}{$application}{'service'}{$proto}{$srv} = {};
+					$ref->{$application}{'service'}{$proto}{$srv} = {};
 				}
 			} else {
 				die "Bad Service Item $current on line $.\n";
 			}
 		}	
 	}
-	if (defined $refxml->{'services'}) {
-		$ref->{$refxml->{'name'}}{'service'}={};
-		pushServices(
-			$refxml->{'services'},
-			$ref->{$refxml->{'name'}}{'service'});
-	}
-	if (defined $refxml->{'protocols'}) {
-		$ref->{$refxml->{'name'}}{'protocol'}={};
-		pushProtocols(
-			$refxml->{'protocols'},
-			$ref->{$refxml->{'name'}}{'protocol'});
-	}
-	if (defined $refxml->{'direction'}) {
-		$ref->{$refxml->{'name'}}{'direction'}={};
-		pushDirections(
-			\%{$refxml->{'direction'}},
-			\%{$ref->{$refxml->{'name'}}{'direction'}});
-	}
+}
 
-	if (defined $refxml->{'multicast'}) {
-		$ref->{$refxml->{'name'}}{'multicast'}={};
-	}
-	if (defined $refxml->{'tos'}) {
-		$ref->{$refxml->{'name'}}{'tos'}={};
-	}
-	if (defined $refxml->{'total'}) {
-		$ref->{$refxml->{'name'}}{'total'}={};
+sub pushDirections {
+my $refxml=shift;
+my $ref=shift;
+my ($srv,$proto,$start,$end,$tmp,$i);
+
+	foreach my $direction (keys %{$refxml}) {
+		#use Data::Dumper;
+		#print "refxml=".Dumper($refxml)."\n";
+		#print "ref=".Dumper($ref)."\n";
+		if (! defined $refxml->{'name'}) {
+			$refxml->{'name'}="default";
+		}
+		if (defined $refxml->{$direction}{'fromsubnets'}) {
+			${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$refxml->{$direction}{'fromsubnets'})) {
+				print "Adding fromsubnets subnet $subnet \n";
+				${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
+			}
+		}
+		if (defined $refxml->{$direction}{'tosubnets'}) { 
+			${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$refxml->{$direction}{'tosubnets'})) {
+				print "Adding tosubnets subnet $subnet \n";
+				${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
+			}
+		}
+		if (defined $refxml->{$direction}{'application'}) { 
+			$ref->{$direction}{application}={};
+			pushApplications( 
+				$refxml->{$direction}{'application'},
+				$ref->{$direction}{'application'});
+		}
+		if (defined $refxml->{$direction}{'services'}) {
+			$ref->{$direction}{'service'}={};
+			pushServices(
+				$refxml->{$direction}{'services'},
+				$ref->{$direction}{'service'});
+		}
+		if (defined $refxml->{$direction}{'protocols'}) {
+			$ref->{$direction}{'protocol'}={};
+			pushProtocols(
+				$refxml->{$direction}{'protocols'},
+				$ref->{$direction}{'protocol'});
+		}
+		if (defined $refxml->{$direction}{'direction'}) {
+			$ref->{$direction}{'direction'}={};
+			pushDirections(
+				$refxml->{$direction}{'direction'},
+				$ref->{$direction}{'direction'});
+		}
+		if (defined $refxml->{$direction}{'multicast'}) {
+			$ref->{$direction}{'multicast'}={};
+		}
+		if (defined $refxml->{$direction}{'tos'}) {
+			$ref->{$direction}{'tos'}={};
+		}
+		if (defined $refxml->{$direction}{'total'}) {
+			$ref->{$direction}{'total'}={};
+		}
+		#print "refxml=".Dumper($refxml)."\n";
+		#print "ref=".Dumper($ref)."\n";
 	}
 }
 
@@ -419,6 +458,7 @@ sub wanted {
 	if (defined $JKFlow::mylist{'all'}) {
 
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
+		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
 		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
     		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
         		countmulticasts(\%{$JKFlow::mylist{'all'}},$which);
@@ -430,6 +470,7 @@ sub wanted {
 	foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
+			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
 			countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
 			#only $dstaddr can be a multicast address 
  	   		if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
@@ -437,20 +478,20 @@ sub wanted {
 			}
 		}
 	}
-
 	# Couting for specific Subnets
 	foreach my $subnetname (keys %{$JKFlow::mylist{'subnet'}}) {
 	   	if (($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) 
 	   	|| ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr))) { 
-			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
-			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
-			if ($subnet = ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
-	    			$which = 'out';
-	        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
+			if (${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
+				$which = 'in';
 			} else {
-				# Do we get directed broadcasts?
-		    		$which = 'in';
-				countmulticasts(\%{$JKFlow::mylist{'subnet'}{${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr)}},$which);
+				$which = 'out';
+			}
+			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
+			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
+			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
+	        		countmulticasts(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			}
 		}
 	}
@@ -462,8 +503,6 @@ sub wanted {
 		countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
 	}
 
-	#use Data::Dumper;
-	#print "Data:".Dumper(%JKFlow::mylist)."\n";
     return 1;
 }
 
@@ -472,72 +511,23 @@ my $ref=shift;
 my $which=shift;
 
 	foreach my $direction (keys %{$ref}) {
-		if ((!defined $ref->{$direction}{'tosubnets'}) && (!defined $ref->{$direction}{'fromsubnets'})) {
-			#print "notosubnet, nofromsubnet\n";
-    			#use Data::Dumper;
-    			#print Dumper(%{$ref->{$direction}})."\n";
-	 		countpackets (\%{$ref->{$direction}},$which);
-			foreach my $application (keys %{$ref->{$direction}{'application'}}) {
-				if (		(defined $ref->{$direction}{'application'}{$application}{'service'}) 
-					&& 	(defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol})) {
-					if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$srcport}) {
-						$ref->{$direction}{'application'}{$application}{'src'}{$which}{'flows'}++;
-						$ref->{$direction}{'application'}{$application}{'src'}{$which}{'bytes'} += $bytes;
-						$ref->{$direction}{'application'}{$application}{'src'}{$which}{'pkts'} += $pkts;
-					}
-					if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$dstport}) {
-						$ref->{$direction}{'application'}{$application}{'dst'}{$which}{'flows'}++;
-						$ref->{$direction}{'application'}{$application}{'dst'}{$which}{'bytes'} += $bytes;
-						$ref->{$direction}{'application'}{$application}{'dst'}{$which}{'pkts'} += $pkts;
-					}
-				}
-			}
-		}
-		elsif ( (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
+		if ( (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
 			 &&  (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr))) ) {
-				#print "tosubnet".$ref->{$direction}{'tosubnet'}->match_integer($dstaddr).",";
-				#print "fromsubnet".$ref->{$direction}{'fromsubnet'}->match_integer($srcaddr)."\n";
+				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
+				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
     				#print Dumper(%{$ref->{$direction}})."\n";
 	 			countpackets (\%{$ref->{$direction}},'out');
-				foreach my $application (keys %{$ref->{$direction}{'application'}}) {
-					if (		(defined $ref->{$direction}{'application'}{$application}{'service'}) 
-						&& 	(defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol})) {
-						if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$srcport}) {
-							$ref->{$direction}{'application'}{$application}{'src'}{'out'}{'flows'}++;
-							$ref->{$direction}{'application'}{$application}{'src'}{'out'}{'bytes'} += $bytes;
-							$ref->{$direction}{'application'}{$application}{'src'}{'out'}{'pkts'} += $pkts;
-						}
-						if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$dstport}) {
-							$ref->{$direction}{'application'}{$application}{'dst'}{'out'}{'flows'}++;
-							$ref->{$direction}{'application'}{$application}{'dst'}{'out'}{'bytes'} += $bytes;
-							$ref->{$direction}{'application'}{$application}{'dst'}{'out'}{'pkts'} += $pkts;
-						}
-					}
-				}
+				countApplications(\%{$ref->{$direction}{'application'}},'out');
 		}
 		elsif ( (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($dstaddr)))
 			 &&  (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($srcaddr))) ) {
-				#print "fromsubnet".$ref->{$direction}{'fromsubnet'}->match_integer($dstaddr).",";
-				#print "tosubnet".$ref->{$direction}{'tosubnet'}->match_integer($srcaddr)."\n";
+				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
+				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
     				#print Dumper(%{$ref->{$direction}})."\n";
 	 			countpackets (\%{$ref->{$direction}},'in');
-				foreach my $application (keys %{$ref->{$direction}{'application'}}) {
-					if (		(defined $ref->{$direction}{'application'}{$application}{'service'}) 
-						&& 	(defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol})) {
-						if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$srcport}) {
-							$ref->{$direction}{'application'}{$application}{'src'}{'in'}{'flows'}++;
-							$ref->{$direction}{'application'}{$application}{'src'}{'in'}{'bytes'} += $bytes;
-							$ref->{$direction}{'application'}{$application}{'src'}{'in'}{'pkts'} += $pkts;
-						}
-						if (defined $ref->{$direction}{'application'}{$application}{'service'}{$protocol}{$dstport}) {
-							$ref->{$direction}{'application'}{$application}{'dst'}{'in'}{'flows'}++;
-							$ref->{$direction}{'application'}{$application}{'dst'}{'in'}{'bytes'} += $bytes;
-							$ref->{$direction}{'application'}{$application}{'dst'}{'in'}{'pkts'} += $pkts;
-						}
-					}
-				}
+				countApplications(\%{$ref->{$direction}{application}},'in');
 		}
 	    	if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
         		countmulticasts(\%{$ref->{$direction}});
@@ -546,6 +536,29 @@ my $which=shift;
 		countDirections(\%{$ref->{$direction}{'direction'}},$which);
 	}
 }
+
+sub countApplications {
+    	my $ref = shift;
+    	my $which = shift;
+    	my $typeos;
+	foreach my $application (keys %{$ref}) {
+		if (		(defined $ref->{$application}{'service'}) 
+			&& 	(defined $ref->{$application}{'service'}{$protocol})) {
+			if (defined $ref->{$application}{'service'}{$protocol}{$dstport}) {
+				$ref->{$application}{'dst'}{$which}{'flows'}++;
+				$ref->{$application}{'dst'}{$which}{'bytes'} += $bytes;
+				$ref->{$application}{'dst'}{$which}{'pkts'} += $pkts;
+			}
+			elsif (defined $ref->{$application}{'service'}{$protocol}{$srcport}) {
+				$ref->{$application}{'src'}{$which}{'flows'}++;
+				$ref->{$application}{'src'}{$which}{'bytes'} += $bytes;
+				$ref->{$application}{'src'}{$which}{'pkts'} += $pkts;
+			}
+		}
+	}
+}
+
+
 
 sub countpackets {
     	my $ref = shift;
@@ -575,15 +588,15 @@ sub countpackets {
 		$ref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
 	}
 	if ((defined $ref->{'service'}) && (defined $ref->{'service'}{$protocol})) {
-		if (defined $ref->{'service'}{$protocol}{$srcport}) {
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
-			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
-		}
 		if (defined $ref->{'service'}{$protocol}{$dstport}) {
 			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'flows'}++;
 			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'bytes'} += $bytes;
 			$ref->{'service'}{$protocol}{$dstport}{'dst'}{$which}{'pkts'} += $pkts;
+		}
+		elsif (defined $ref->{'service'}{$protocol}{$srcport}) {
+			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'flows'}++;
+			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'bytes'} += $bytes;
+			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
 		}
 	}
 }
