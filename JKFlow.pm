@@ -126,7 +126,7 @@ sub parseConfig {
 
 	use XML::Simple;
 	$config=XMLin('/usr/local/bin/JKFlow.xml',
-		forcearray=>['router','interface','subnet','network','direction','application','defineset','set']);
+		forcearray=>['router','interface','subnet','site','network','direction','application','defineset','set']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
@@ -191,31 +191,10 @@ sub parseConfig {
 			
 	}
 
-	foreach my $subnetname (keys %{$config->{subnets}{subnet}}) {
-		print "Subnets: + subnet $subnetname\n";
-		if (defined $config->{subnets}{subnet}{$subnetname}{localsubnets}) {
-			$JKFlow::mylist{subnets}{subnet}{$subnetname}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
-			foreach my $subnet (split(/,/,$config->{subnets}{subnet}{$subnetname}{localsubnets})) {
-				print "Subnets: subnet $subnetname + localsubnets subnet $subnet\n";
-				$JKFlow::mylist{subnets}{subnet}{$subnetname}{localsubnets}->add_string($subnet);
-			}
-		}
-		${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
-		foreach my $subnet (split(/,/,$config->{subnets}{subnet}{$subnetname}{subnets})) {
-			print "Subnets: subnet $subnetname + subnet $subnet\n";
-			${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->add_string($subnet);
-			$JKFlow::SUBNETS->add_string($subnet);
-		}
-		if (defined $config->{subnets}{subnet}{$subnetname}{samplerate}) {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'samplerate'}=$config->{subnets}{subnet}{$subnetname}{samplerate};
-		} else {
-			$JKFlow::mylist{'subnet'}{$subnetname}{'samplerate'}=1;
-		}
-		
-		parseDirection (
-			\%{$config->{subnets}{subnet}{$subnetname}},
-			\%{$JKFlow::mylist{subnet}{$subnetname}});
-	}
+	pushDirections (
+		\%{$config->{directions}{direction}},
+		\%{$JKFlow::mylist{direction}});
+
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
 		if (defined $config->{netwerks}{network}{$network}{direction}) { 
@@ -242,13 +221,7 @@ sub parseConfig {
 	
 	if (defined $config->{router}{total_router}) {
 		$JKFlow::mylist{'total_router'} = {};
-	}
-	if (defined $config->{subnet}{total_subnet}) {
-		$JKFlow::mylist{'total_subnet'} = {};
-	}		
-	#use Data::Dumper;
-	#print "Data:".Dumper($JKFlow::mylist{subnets})."\n";
-	#print "Data:".Dumper($config)."\n";
+	}	
 }
 
 sub parseDirection {
@@ -402,6 +375,10 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 
 	foreach my $direction (keys %{$refxml}) {
 		print "Adding direction $direction\n";
+		my $fromsubnets=[];
+		my $tosubnets=[];
+		my $nofromsubnets=[];
+		my $notosubnets=[];
 		$ref->{$direction}{name}=$direction;
 
 		if (defined $refxml->{$direction}{'samplerate'}) {
@@ -414,6 +391,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'fromsubnets'})) {
 				print "Adding fromsubnets subnet $subnet \n";
+				push @{$fromsubnets}, $subnet;
 				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
 			}
@@ -422,6 +400,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'tosubnets'})) {
 				print "Adding tosubnets subnet $subnet \n";
+				push @{$tosubnets}, $subnet;
 				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 			}
@@ -430,6 +409,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'nofromsubnets'})) {
 				print "Adding nofromsubnets subnet $subnet \n";
+				push @{$nofromsubnets}, $subnet;
 				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
 			}
@@ -438,25 +418,68 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'notosubnets'})) {
 				print "Adding notosubnets subnet $subnet \n";
+				push @{$notosubnets}, $subnet;
 				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 			}
 		}
 
-		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
-			foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
+		if (defined $refxml->{$direction}{"from"}) {
+			if (!defined $ref->{$direction}{'fromsubnets'}) {
+				${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			if (!defined $ref->{$direction}{'nofromsubnets'}) {
+				${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			print "Adding fromsubnets ".$refxml->{$direction}{"from"}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{'from'})) {
+				print "Adding fromsite $site \n";
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
+					print "Adding fromsubnets subnet $subnet \n";
+					push @{$fromsubnets}, $subnet;
+					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
+					${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
+				}
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
+					print "Adding nofromsubnets subnet $subnet \n";
+					push @{$nofromsubnets}, $subnet;
+					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
+					${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
+				}	
+			}
+		}
+
+		if (defined $refxml->{$direction}{"to"}) {
+			if (!defined $ref->{$direction}{'tosubnets'}) {
+				${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			if (!defined $ref->{$direction}{'notosubnets'}) {
+				${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			print "Adding tosubnets ".$refxml->{$direction}{"to"}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{'to'})) {
+				print "Adding tosite $site \n";
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
+					print "Adding tosubnets subnet $subnet \n";
+					push @{$tosubnets}, $subnet;
+					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
+					${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
+				}
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
+					print "Adding notosubnets subnet $subnet \n";
+					push @{$notosubnets}, $subnet;
+					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
+					${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
+				}	
+			}
+		}
+
+		foreach my $fromsubnet (@{$fromsubnets}) {
+			foreach my $tosubnet (@{$tosubnets}) {
 				print "Subnets: FROM=".$fromsubnet." TO=".$tosubnet."\n";
 				my $list=[];
-				my $nofromsubnets=[];
-				my $notosubnets=[];
 				if (defined $JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}) {
 					$list=$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet};
-				}
-				foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
-					push @{$nofromsubnets},$nofromsubnet;
-				}
-				foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
-					push @{$notosubnets},$notosubnet;
 				}
 				push @{$list},{ 
 				nofromsubnets=>$nofromsubnets,
@@ -464,14 +487,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				ref=>$ref->{$direction}
 				};
 				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$list;
-				if ($refxml->{$direction}{'monitor'} eq 'yes') {
-					$ref->{$direction}{monitor}="Yes";
-				} else {
-					$ref->{$direction}{monitor}="No";
-				}
 			}
 		}
-
+		if ($refxml->{$direction}{'monitor'} eq 'yes') {
+			$ref->{$direction}{monitor}="Yes";
+		} else {
+			$ref->{$direction}{monitor}="No";
+		}
 		parseDirection (
 			\%{$refxml->{$direction}},
 			\%{$ref->{$direction}});
@@ -568,36 +590,6 @@ sub wanted {
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
 			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
 		}
-	}
-	# Couting for specific Subnets
-	foreach my $subnetname (keys %{$JKFlow::mylist{'subnet'}}) {
-		$which = '';
-		if (defined $JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}) {
-			if ($JKFlow::mylist{'subnet'}{$subnetname}{'localsubnets'}->match_integer($dstaddr)) {
-				$which = 'in';
-			} else {
-				$which = 'out';
-			}
-		}
-		if ($which eq 'out' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($srcaddr)) {
-			$which = 'out';
-			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
-			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
-		}
-		elsif ($which eq 'in' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
-			$which = 'in';
-			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
-			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
-		}
-	}
-	# Counting Directions for specific Networks
-	# Note that no general packets/multicasts are counted, because
-	# the primary intended function of Networks is to be a compound of several
-	# Subnets/Routers
-	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-		#countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
 	}
 	countDirections2();
 
@@ -1036,20 +1028,11 @@ sub report {
 			summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
 		}
 	}
-	if (defined $JKFlow::mylist{'total_subnet'}) {
-		foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
-			summarize(\%{$JKFlow::mylist{'total_subnet'}},\%{$JKFlow::mylist{'subnet'}{$subnet}},1);
-		}
-	}
 
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
  		foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
 			print "Summarize $network, $router \n";
 			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
-		}
-		foreach my $subnet (keys %{$JKFlow::mylist{'network'}{$network}{'subnet'}}) {
-			print "Summarize $network, $subnet \n";
-			summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'subnet'}{$subnet}},$JKFlow::mylist{'subnet'}{$subnet}{'samplerate'});
 		}
 	}  
 	
@@ -1070,11 +1053,6 @@ sub report {
 		mkdir($JKFlow::RRDDIR."/total_router",0755);
 	}
 	reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}},1);
-
-	if (! -d $JKFlow::RRDDIR."/total_subnet" ) {
-		mkdir($JKFlow::RRDDIR."/total_subnet",0755);
-	}
-	reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}},1);
 
 	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
 		if (${$JKFlow::mylist{'router'}{$router}}{'write'} eq 'yes') {
@@ -1119,22 +1097,17 @@ sub report {
 			}
 		}
 	}
-						 
 
-	foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
-		if (${$JKFlow::mylist{'subnet'}{$subnet}}{'write'} eq 'yes') {
-			($subnetdir=$subnet) =~ s/\//_/g;
-			if (! -d $JKFlow::RRDDIR ."/subnet_$subnetdir" ) {
-				mkdir($JKFlow::RRDDIR ."/subnet_$subnetdir",0755);
-			}
-			if (! -d $JKFlow::SCOREDIR ."/subnet_$subnetdir" ) {
-				mkdir($JKFlow::SCOREDIR ."/subnet_$subnetdir",0755);
-			}
-			reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}},$JKFlow::mylist{'subnet'}{$subnet}{'samplerate'});
-			if (defined $JKFlow::mylist{'subnet'}{$subnet}{scoreboard}) {
-				scoreboard($self, \%{$JKFlow::mylist{'subnet'}{$subnet}{scoreboard}}, "/subnet_".$subnetdir);
-			}
+	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
+		print "Reporting Direction $direction \n";
+		if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
+			mkdir($JKFlow::RRDDIR . $dir . "/" . $direction ,0755);
 		}
+		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
+			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
+		}	
+		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist->{'direction'}{$direction}{'samplerate'});
+		#reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},1);
 	}
     
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
