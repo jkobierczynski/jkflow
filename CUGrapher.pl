@@ -9,6 +9,7 @@ use strict;
 use CGI::Pretty qw(-nosticky :standard);
 use RRDs;
 use Digest::MD5 qw(md5_hex);
+use Data::Dumper;
 
 ### Local settings ###
 
@@ -259,7 +260,7 @@ sub showMenu {
 	print $q->start_Tr;
 
 	print $q->td( { -align => 'center' }, $q->b($router),
-		      $q->hidden( -name => 'router', -default => $router ) );
+		      $q->hidden( -name => 'router', -default => $router ));
 
 	print $q->td( $q->scrolling_list( -name => "${router}_protocol",
 					  -values => [sort &getProtocolList("router_".$router)],
@@ -320,7 +321,7 @@ sub showMenu {
 	print $q->start_Tr;
 
 	print $q->td( { -align => 'center' }, $q->b($subnet),
-		      $q->hidden( -name => 'subnet', -default => $subnet ) );
+		      $q->hidden( -name => 'subnet', -default => $subnet ));
 
 	print $q->td( $q->scrolling_list( -name => "${subnet}_protocol",
 					  -values => [sort &getProtocolList("subnet_".$subnet)],
@@ -517,9 +518,10 @@ sub getFilenames {
                 -f $subdir{$type}{$r}{'tos'}{$s} or &browserDie("Cannot find file $subdir{$type}{$r}{'tos'}{$s}");
                 }
             }
-
+            if ( param("${r}_total")) {
             $subdir{$type}{$r}{'total'}="${rrddir}/${type}_${r}/total.rrd";
             -f $subdir{$type}{$r}{'total'} or &browserDie("Cannot find file $subdir{$type}{$r}{'total'}");
+            }
         }
     }
     foreach my $r ('total_router','total_subnet') {
@@ -940,6 +942,7 @@ sub io_report {
 
       # CDEF for total
       foreach my $r (keys %{$subdir{$type}}) {
+        if (defined $subdir{$type}{$r}{'protocol'} || defined $subdir{$type}{$r}{'service'} || defined $subdir{$type}{$r}{'tos'}) { 
 	    if( $reportType eq 'bits' ) {
 	        push @args, ('DEF:'.&cleanDEF("${r}_total_out_bytes").'='.$subdir{$type}{$r}{'total'}.':out_bytes:AVERAGE',
 		  	     'CDEF:'.&cleanDEF("${r}_total_out_bits").'='.&cleanDEF("${r}_total_out_bytes").',8,*',
@@ -951,6 +954,7 @@ sub io_report {
 			     'DEF:'.&cleanDEF("${r}_total_in_${reportType}").'='.$subdir{$type}{$r}{'total'}.":in_${reportType}:AVERAGE",
 			     'CDEF:'.&cleanDEF("${r}_total_in_${reportType}_neg").'='.&cleanDEF("${r}_total_in_${reportType}").',-1,*');
 	    }
+        }
  
         # CDEFs for each protocol
 	$str1 = 'CDEF:'.&cleanDEF("${r}_other_protocol_in_pct").'=100';
@@ -1125,19 +1129,23 @@ sub io_report {
             push @args, 'GPRINT:'.&cleanDEF("${r}_${s}_out_pct").':AVERAGE:%.1lf%% Out';
             push @args, 'GPRINT:'.&cleanDEF("${r}_${s}_in_pct").':AVERAGE:%.1lf%% In\n',
 	}
+        if (defined $subdir{$type}{$r}{'total'}) {
+	   push @args, 'LINE1:'.&cleanDEF("${r}_total_out_".$reportType).$color{$r}{'total'}.':TOTAL';
+	   push @args, 'LINE1:'.&cleanDEF("${r}_total_in_".$reportType.'_neg').$color{$r}{'total'}.':TOTAL';
+        }
       }
     }
     $count = 0;
     # network outbound, percentages
     foreach my $n (keys %{$subdir{'network'}} ) {
-    	$count++;
-    	if( $count == 1 ) {
-		push @args, 'AREA:'.&cleanDEF("all_${n}_out_".$reportType).$color{$n}.':'.&cleanProtocolLabel($n);
-    	} else {
+    		$count++;
+    		if( $count == 1 ) {
+			push @args, 'AREA:'.&cleanDEF("all_${n}_out_".$reportType).$color{$n}.':'.&cleanProtocolLabel($n);
+    		} else {
+			push @args, 'STACK:'.&cleanDEF("all_${n}_out_".$reportType).$color{$n}.':'.&cleanProtocolLabel($n);
+    		}
 		push @args, 'STACK:'.&cleanDEF("all_${n}_out_".$reportType).$color{$n}.':'.&cleanProtocolLabel($n);
-    	}
-	push @args, 'STACK:'.&cleanDEF("all_${n}_out_".$reportType).$color{$n}.':'.&cleanProtocolLabel($n);
-    	#push @args, 'GPRINT:'.&cleanDEF("all_${n}_out_pct").':AVERAGE:%.1lf%% Out\n';
+    		#push @args, 'GPRINT:'.&cleanDEF("all_${n}_out_pct").':AVERAGE:%.1lf%% Out\n';
     }
     # network other percentages
     if ( scalar %{$subdir{'network'}} ) {
