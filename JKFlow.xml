@@ -6,6 +6,7 @@
 		</direction>
 		<services>80/tcp,81/tcp,110/tcp,53/udp</services>
 		<protocols>tcp,udp,icmp</protocols>
+		<multicast/>
 		<tos/>
 		<total/>
 	</all>
@@ -47,6 +48,7 @@
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
 				<application name="windows">137-139/tcp,137-139/udp</application>
+				<multicast/>
 			</direction>
 			<services>22/tcp,23/tcp,53/udp,53/tcp,102/tcp</services>
 			<protocols>tcp,udp,icmp</protocols>
@@ -61,11 +63,11 @@
 			<subnets>10.240.72.0/22,10.101.249.0/24</subnets>
 		</network>
 		<network name="Holland">
-			<direction name="Windows belgium-holland" fromsubnet="10.101.72.0/22" tosubnet="10.240.0.0/16">
+			<direction name="Windows belgium-holland" fromsubnet="0.0.0.0/0" tosubnet="0.0.0.0/0">
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
-				<services>99/tcp,100/tcp</services>
-				<protocols>egp</protocols>
+				<services>21/tcp,53/udp,53/tcp</services>
+				<protocols>tcp,udp</protocols>
 			</direction>
 		</network>
 	</networks>
