@@ -299,9 +299,9 @@ sub parseConfig {
 	    # Stick this entry into our trie
 	    $subnet=$1;
 	    $CUFlow::SUBNETS->add_string($subnet);
-            $CUFlow::mysubnetlist{$subnet}{'total'} = {};
-            $CUFlow::mysubnetlist{$subnet}{'tos'} = {};
-            $CUFlow::mysubnetlist{$subnet}{'multicast'} = {};
+            $CUFlow::mysubnetlist{'subnet'}{$subnet} = {};
+            #$CUFlow::mysubnetlist{'subnet'}{$subnet}{'tos'} = {};
+            #$CUFlow::mysubnetlist{$subnet}{'multicast'} = {};
             print "Subnet: $1 Ports: $2\n";
             foreach $current (split(/,/,$2)) {
                 # Parse each item
@@ -313,7 +313,8 @@ sub parseConfig {
                         $tmp = getprotobyname($proto) ||
                             die "Unknown protocol $proto on line $.\n";
                         $proto = $tmp;
-			$CUFlow::mysubnetlist{$subnet}{$proto}{'total'} = {};
+			#$CUFlow::mysubnetlist{'subnet'}{$subnet}{'protocol'}{$proto}{'total'} = {};
+			$CUFlow::mysubnetlist{'subnet'}{$subnet}{'protocol'}{$proto} = {};
                     }
 
                     if ($srv =~ /(\d+)-?(\d+)?/) { # Numeric or range
@@ -324,7 +325,8 @@ sub parseConfig {
                             ($end < $start);
 
                         for($i=$start;$i<=$end;$i++) {
-                            $CUFlow::mysubnetlist{$subnet}{$proto}{$i} = {}; # Save all these ports
+                            #$CUFlow::mysubnetlist{$subnet}{$proto}{$i} = {}; # Save all these ports
+                            $CUFlow::mysubnetlist{'subnet'}{$subnet}{'service'}{$proto}{$i} = {}; # Save all these ports
                         }
                     } else {    # Symbolic or bad?
                         if ($srv !~ /\d+/) { # Not an integer?
@@ -335,7 +337,7 @@ sub parseConfig {
 
                             $srv = $tmp;
                         }
-                        $CUFlow::mysubnetlist{$subnet}{$proto}{$srv} = {};
+                        $CUFlow::mysubnetlist{'subnet'}{$subnet}{'service'}{$proto}{$srv} = {};
                     }
                 } else {
                     die "Bad Service item $current on line $.\n";
@@ -344,7 +346,7 @@ sub parseConfig {
 	    }
 	} elsif (/^\s*Router\s+(\d+\.\d+\.\d+\.\d+)\s*(\S+)\s*(.*)$/) {
             $router=$1;
-	    $CUFlow::myrouterlist{$router}{'name'}={$2};
+	    $CUFlow::myrouterlist{$router}{'name'}=$2;
             foreach $current (split(/,/,$3)) {
                 # Parse each item
                 if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
@@ -355,9 +357,9 @@ sub parseConfig {
                         $tmp = getprotobyname($proto) ||
                             die "Unknown protocol $proto on line $.\n";
                         $proto = $tmp;
-                        $CUFlow::myrouterlist{$router}{'total'} = {};
-                        $CUFlow::myrouterlist{$router}{'tos'} = {};
-                        $CUFlow::myrouterlist{$router}{'multicast'} = {};
+                        $CUFlow::myrouterlist{'router'}{$router}{'protocol'}{$proto} = {};
+                        #$CUFlow::myrouterlist{$router}{'tos'} = {};
+                        #$CUFlow::myrouterlist{$router}{'multicast'} = {};
                     }
 
                     if ($srv =~ /(\d+)-?(\d+)?/) { # Numeric or range
@@ -368,7 +370,7 @@ sub parseConfig {
                             ($end < $start);
 
                         for($i=$start;$i<=$end;$i++) {
-                            $CUFlow::myrouterlist{$router}{$proto}{$i} = {}; # Save all these ports
+                            $CUFlow::myrouterlist{'router'}{$router}{'service'}{$proto}{$i} = {}; # Save all these ports
                         }
                     } else {    # Symbolic or bad?
                         if ($srv !~ /\d+/) { # Not an integer?
@@ -379,7 +381,7 @@ sub parseConfig {
 
                             $srv = $tmp;
                         }
-                        $CUFlow::myrouterlist{$router}{$proto}{$srv} = {};
+                        $CUFlow::myrouterlist{'router'}{$router}{'service'}{$proto}{$srv} = {};
                     }
                 } else {
                     die "Bad Service item $current on line $.\n";
@@ -416,6 +418,7 @@ sub parseConfig {
 			$tmp = getprotobyname($proto) || 
 			    die "Unknown protocol $proto on line $.\n";
 			$proto = $tmp;
+			$CUFlow::myalllist{'protocol'}{$tmp} = {};
 		    }
 
 		    if ($srv =~ /(\d+)-?(\d+)?/) { # Numeric or range
@@ -426,7 +429,7 @@ sub parseConfig {
 			    ($end < $start);
 
 			for($i=$start;$i<=$end;$i++) {
-			    $hr->{$proto}{$i} = 1; # Save all these ports
+			    $CUFlow::myalllist{'service'}{$proto}{$i} = {}; # Save all these ports
 			}
 		    } else {	# Symbolic or bad?
 			if ($srv !~ /\d+/) { # Not an integer? 
@@ -437,7 +440,7 @@ sub parseConfig {
 
 			    $srv = $tmp;
 			}
-			$hr->{$proto}{$srv} = 1;
+			$CUFlow::myalllist{'service'}{$proto}{$srv} = {};
 		    }
 		} else {
 		    die "Bad Service item $current on line $.\n";
@@ -501,18 +504,21 @@ sub parseConfig {
 		# Try resolving
 		$tmp = getprotobyname($proto) || 
 		    die "Unknown protocol $proto on line $.\n";
+	        $CUFlow::myalllist{'protocol'}{$tmp} = {};
 		if (defined($label)) {
 		    $CUFlow::PROTOCOLS{$tmp} = $label;
 		} else {
 		    $CUFlow::PROTOCOLS{$tmp} = $proto;
 		}
 	    } else {
+	        $CUFlow::myalllist{'protocol'}{$proto} = {};
 		if (defined($label)) {
 		    $CUFlow::PROTOCOLS{$proto} = $label;
 		} else {
 		    $CUFlow::PROTOCOLS{$proto} = $proto;
 		}
 	    }
+	    $CUFlow::myalllist{'protocol'}{$proto} = {};
 	    
 	} elsif (/^\s*OutputDir\s+(\S+)\s*$/) {
 	    $CUFlow::OUTDIR = $1;
@@ -522,9 +528,6 @@ sub parseConfig {
     }
 
     close(FH);
-    use Data::Dumper;
-    print Dumper(%CUFlow::mysubnetlist) ;
- 
 }
 
 sub new {
@@ -605,7 +608,7 @@ sub wanted {
       countpackets(\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}});
       }
     #use Data::Dumper;
-    #print Dumper(%CUFlow::mysubnetlist);
+    #print Dumper(%CUFlow::myalllist);
     return 1;
 }
 
@@ -656,6 +659,7 @@ sub perfile {
 sub summarize {
    my $sumref = shift;
    my $addref = shift;
+   my $typeos;
     
    foreach my $type ('bytes','pkts','flows') {
       foreach my $which ('in','out') {
@@ -671,13 +675,13 @@ sub summarize {
          }
          $sumref->{'multicast'}{'total'}{$which}{$type} 
 		+= $addref->{'multicast'}{'total'}{$which}{$type};
-         foreach my $tos ('normal','other') {
+         foreach my $typeos ('normal','other') {
             foreach my $protocol (keys %{$addref->{'protocol'}}) {
-         	$sumref->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{$type}
-			+= $addref->{'protocol'}{$protocol}{'tos'}{$tos}{$which}{$type};
+         	$sumref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type}
+			+= $addref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type};
             }
-            $sumref->{'multicast'}{'tos'}{$tos}{$which}{$type} 
- 		+= $addref->{'multicast'}{'tos'}{$tos}{$which}{$type};
+            $sumref->{'multicast'}{'tos'}{$typeos}{$which}{$type} 
+ 		+= $addref->{'multicast'}{'tos'}{$typeos}{$which}{$type};
          }
       }
    }
@@ -685,6 +689,7 @@ sub summarize {
 
 sub reporttorrdfiles {
     
+    use RRDs;			# To actually produce results
     my $self=shift;
     my $dir=shift;
     my $reference=shift;
@@ -773,7 +778,7 @@ sub reporttorrdfiles {
           if (!($tmp = getprotobynumber($protocol))) {
 	    $tmp = $protocol;
           }
-          $file = $CUFlow::OUTDIR."/". $dir . "/protocol_" . $tmp . ".rrd";
+          $file = $CUFlow::OUTDIR. $dir . "/protocol_" . $tmp . ".rrd";
           @values = ();
 	  foreach my $i ('bytes','pkts','flows') {
 	        foreach my $j ('in','out') {
@@ -804,7 +809,7 @@ sub reporttorrdfiles {
                 if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
 		  $tmp = $srv;
                 }
-	        $file = $CUFlow::OUTDIR."/". $dir . "/service_" . $tmp . "_" . $src . ".rrd";
+	        $file = $CUFlow::OUTDIR. $dir . "/service_" . $tmp . "_" . $src . ".rrd";
 	        @values = ();
 	        foreach my $i ('bytes','pkts','flows') {
 	           foreach my $j ('in','out') {
@@ -838,7 +843,7 @@ sub report {
     my($routerfile);
     my(@values) = ();
     my(@array);
-    my($hr,$count, $i ,$j ,$k , $tmp,$srv,$subnetdir,$routerdir);
+    my($hr,$count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
 
     # Zeroth, this takes a lot of time. So let's fork and return
     if (fork()) {		# We are the parent, wait
@@ -850,37 +855,46 @@ sub report {
 	exit if (fork());
     }
 
-    foreach my $subnet (keys %CUFlow::mysubnetlist) {
-        ($subnetdir=$subnet) =~ s/\//_/g;
-	if (! -d "$CUFlow::OUTDIR/" . $subnetdir ) {
-	    mkdir("$CUFlow::OUTDIR/" . $subnetdir,0755);
-	}
-    }
-    
-    foreach my $router (keys %CUFlow::myrouterlist) {
-        ($routerdir=$router) =~ s/\//_/g;
-	if (! -d "$CUFlow::OUTDIR/" . $routerdir ) {
-	    mkdir("$CUFlow::OUTDIR/" . $routerdir,0755);
+    foreach my $router (keys %{$CUFlow::myrouterlist{'router'}}) {
+        ($routerdir=$CUFlow::myrouterlist{$router}{'name'}) =~ s/\//_/g;
+	if (! -d $CUFlow::OUTDIR . "/router_$routerdir" ) {
+	    mkdir($CUFlow::OUTDIR . "/router_$routerdir",0755);
 	}
     }
 
-    for my $router (keys %CUFlow::myrouterlist) {
-      summarize(\%{$CUFlow::myrouterlist{'router'}{$router}},\%CUFlow::myrouterlist);
+    foreach my $subnet (keys %{$CUFlow::mysubnetlist{'subnet'}}) {
+        ($subnetdir=$subnet) =~ s/\//_/g;
+	if (! -d $CUFlow::OUTDIR ."/subnet_$subnetdir" ) {
+	    mkdir($CUFlow::OUTDIR ."/subnet_$subnetdir",0755);
+	}
     }
-    for my $subnet (keys %CUFlow::mysubnetlist) {
-      summarize(\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}},\%CUFlow::mysubnetlist);
+
+    if (! -d $CUFlow::OUTDIR."/router_total" ) {
+    mkdir($CUFlow::OUTDIR."/router_total",0755);
+    }
+    if (! -d $CUFlow::OUTDIR."/subnet_total" ) {
+    mkdir($CUFlow::OUTDIR."/subnet_total",0755);
+    }
+
+    foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
+      summarize(\%{$CUFlow::myrouterlist{'router'}{$rt}},\%CUFlow::myrouterlist);
+    }
+    foreach my $sn (keys %{$CUFlow::mysubnetlist{'subnet'}}) {
+      summarize(\%{$CUFlow::mysubnetlist{'subnet'}{$sn}},\%CUFlow::mysubnetlist);
     }
 	
-    reporttorrdfiles("",\%{$CUFlow::myalllist});
-    reporttorrdfiles("routertotal",\%{$CUFlow::myrouterlist});
-    reporttorrdfiles("subnettotal",\%{$CUFlow::mysubnetlist});
-    foreach my $router (keys %CUFlow::myrouterlist) {
-    	reporttorrdfiles($CUFlow::myrouterlist{'router'}{$router}{'name'},\%{$CUFlow::myrouterlist{'router'}{$router}});
+    reporttorrdfiles($self,"",\%{$CUFlow::myalllist});
+    reporttorrdfiles($self,"/router_total",\%{$CUFlow::myrouterlist});
+    reporttorrdfiles($self,"/subnet_total",\%{$CUFlow::mysubnetlist});
+    foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
+        print("Router:".$CUFlow::myrouterlist{$rt}{'name'}."\n");
+    	reporttorrdfiles($self,"/router_".$CUFlow::myrouterlist{$rt}{'name'},\%{$CUFlow::myrouterlist{'router'}{$rt}});
     }
 
-    foreach my $subnet (keys %CUFlow::mysubnetlist) {
-        ($subnetdir=$subnet) =~ s/\//_/g;
-    	reporttorrdfiles($subnetdir,\%{$CUFlow::mysubnetlist{'subnet'}{$subnet}});
+    foreach my $sn (keys %{$CUFlow::mysubnetlist{'subnet'}}) {
+        ($subnetdir=$sn) =~ s/\//_/g;
+        print("Subnet:$subnetdir\n");
+     	reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$CUFlow::mysubnetlist{'subnet'}{$sn}});
     }
 
     # Should we do scoreboarding?
