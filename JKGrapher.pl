@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -w
+#!/usr/bin/perl -w
 
 # JKGrapher.pl
 # $Revision$
@@ -9,6 +9,7 @@ use CGI::Pretty qw(-nosticky :standard);
 use RRDs;
 use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
+use XML::Simple;
 
 ### Local settings ###
 
@@ -81,6 +82,37 @@ my %single_list =	(
 			out => [@single_colors] 
 					);
 
+my %definedcolors =	(
+			'tcp' => 		{src => 0x0000FF }, # Blue
+			'udp' => 		{src => 0x00FF00 }, # Green
+			'icmp' =>		{src => 0x00D0D0 }, # Cyan
+			'web' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
+			'secureweb' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
+			'tcp_http' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
+			'tcp_ftp' => 		{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
+			'tcp_ftp-data' => 	{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
+			'tcp_netbios-ns' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'udp_netbios-ns' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'tcp_netbios-dgm' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'udp_netbios-dgm' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'tcp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'udp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'windows' => 		{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'dns' =>		{src => 0x993399, dst => 0xAA66AA }, # Purple
+			'tcp_telnet' =>		{src => 0x707070, dst => 0x909090 }, # Gray
+			'tcp_ssh' =>		{src => 0x707070, dst => 0x909090 }, # Gray
+			'mail' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
+			'mailreading' =>	{src => 0x00FF00, dst => 0x60FF60 }, # Green
+			'tcp_imap' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
+			'tcp_pop3' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
+			'tcp_x400' =>	 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
+			'tcp_iso-tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
+			'tcp_smtp' => 		{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
+			'tcp_nntp' =>		{src => 0xC09010, dst => 0xD0A040 }, # Brown
+			'total' => 		{src => 0x000000 } # Black
+);
+
+
 if( !param() ) {
     &showList();
 } elsif ( param("showlist") ) {
@@ -143,8 +175,7 @@ sub showList {
 						-bgcolor => 'ffffff' );
 	print $q->start_form( -action => $q->self_url, -method => 'get' );
 	print $q->start_table( { 	-align => 'center',
-					-border => '1'
-					-cellspacing => '10' } );
+					-cellspacing => '10'});
 	print $q->hidden( 	-name => 'showlist', 
 				-default => "1" ); 
 	print $q->Tr( { -align => 'center' },
@@ -175,7 +206,8 @@ sub showMenu {
 						-bgcolor => 'ffffff' );
 	print $q->start_form( -action => $q->self_url, -method => 'get' );
 	print $q->start_table( { 	-align => 'center',
-					-cellspacing => '10' } );
+					-cellspacing => '10' ,
+					-border => '0'} );
 	print $q->start_Tr( { 		-align => 'center',
 					-valign => 'top' } );
 	print $q->td( { 	-rowspan => '2' },
@@ -204,7 +236,7 @@ sub showMenu {
 				-default => $hours,
 				-labels => \%hours ) );
     
-	print $q->td( { -rowspan => '2' },
+	print $q->td( { -rowspan => '1' },
 		"Image type: ",
 		$q->popup_menu(	-name => 'imageType',
 				-values => ['png', 'gif'],
@@ -229,6 +261,10 @@ sub showMenu {
 		$q->popup_menu( -name => 'duration',
 				-values => ['', sort {$a <=> $b} keys %hours],
 				-labels => \%hours ) );
+	
+	print $q->td( { -rowspan => '1' },
+		"Predefined Colors: ",
+		$q->checkbox( -name => "predefinedcolors",-value => '1',-label => 'Yes' ));
 
 	print $q->end_Tr();
 	print $q->end_table();
@@ -443,11 +479,24 @@ sub doReport {
 }
 
 # use a color and move it to the back
-sub iterateColor {
-    my $color = shift @{$_[0]};
-    push @{$_[0]}, $color;
+#sub iterateColor {
+#    my $color = shift @{$_[0]};
+#    push @{$_[0]}, $color;
+#
+#    return sprintf('#%06x', $color);
+#}
 
-    return sprintf('#%06x', $color);
+sub getColor {
+    	my $refcolor=shift;
+    	my $tag = shift;
+	my $direction = shift;
+    	if (defined $definedcolors{$tag} && param('predefinedcolors') eq 1)  {
+    		return sprintf('#%06x', $definedcolors{$tag}{$direction});
+    	} else {
+    		my $shiftcolor = shift @{$refcolor};
+		push @{$refcolor}, $shiftcolor;
+    		return sprintf('#%06x', $shiftcolor);
+    	}
 }
 
 sub getDirectoryList {
@@ -642,13 +691,13 @@ sub plotreport {
 		foreach my $p (keys %{$ref->{'protocol'}} ) {
 			if (defined param('protocol_stacked') && param('protocol_stacked') eq 1) {
 				if( $countref->{protocol}{$direction} == 0 ) {
-					$string = 'AREA:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'AREA:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
 				} else {
-					$string = 'STACK:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'STACK:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
 				}
 				$countref->{protocol}{$direction}++;
 			} else {
-				$string = 'LINE2:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+				$string = 'LINE2:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
 			}
       			if ($direction eq 'in') {
 				push @{$argsref->{protocol}{in}}, $string.':'.cleanProtocolLabel($basename, $p);
@@ -671,13 +720,13 @@ sub plotreport {
 			foreach my $srcdst ('src','dst') {
 				if (defined param('service_stacked') && param('service_stacked') eq 1) {
 					if( $countref->{service}{$direction} == 0 ) {
-						$string = 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$double_list{$direction}});
+						$string = 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
 					} else {
-						$string = 'STACK:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$double_list{$direction}});
+						$string = 'STACK:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
 					}
 					$countref->{service}{$direction}++;
 				} else {
-					$string = 'LINE2:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$double_list{$direction}});
+					$string = 'LINE2:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
 				
 				}
       				if ($direction eq 'in') {
@@ -702,13 +751,13 @@ sub plotreport {
 		foreach my $t (keys %{$ref->{'tos'}} ) {
 			if (defined param('tos_stacked') && param('tos_stacked') eq 1) {
 				if( $countref->{tos}{$direction} == 0 ) {
-					$string = 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$t,'src');
 				} else {
-					$string = 'STACK:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'STACK:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$t,'src');
 				}
 				$countref->{tos}{$direction}++;
 			} else {
-				$string = 'LINE2:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+				$string = 'LINE2:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$t,'src');
 			}
       			if ($direction eq 'in') {
 				push @{$argsref->{tos}{in}}, $string.':'.cleanProtocolLabel($basename,$t);
@@ -730,13 +779,13 @@ sub plotreport {
 			}
 			if (defined param('total_stacked') && param('total_stacked') eq 1) {
 				if( $countref->{total}{$direction} == 0 ) {
-					$string = 'AREA:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'AREA:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},'total','src');
 				} else {
-					$string = 'STACK:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+					$string = 'STACK:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},'total','src');
 				}
 				$countref->{total}{$direction}++;
 			} else {
-				$string = 'LINE2:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&iterateColor(\@{$single_list{$direction}});
+				$string = 'LINE2:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},'total','src');
 			}
 	      		if ($direction eq 'in') {
 				push @{$argsref->{total}{in}}, $string.':TOTAL '.$basename;

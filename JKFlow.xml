@@ -39,8 +39,8 @@
     <total_router/>
   </routers>
   <subnets>
-    <subnet subnets="192.168.1.0/24,192.168.2.0/24" name="Belgium" write="yes">
-      <direction name="Belg-Germany" fromsubnets="192.168.1.0/24" tosubnets="10.10.0.0/16">
+    <subnet subnets="192.168.0.0/17" name="Belgium" write="yes">
+      <direction name="Belg-Germany" fromsubnets="192.168.0.0/17" tosubnets="192.168.128.0/17" notosubnets="192.168.210.0/24">
         <application name="web">80/tcp,8080/tcp</application>
         <application name="secureweb">443/tcp</application>
         <application name="mailreading">110/tcp,143/tcp</application>
@@ -51,7 +51,18 @@
         <tos/>
         <total/>
       </direction>
-      <direction name="Belgium-France" fromsubnets="192.168.1.0/24" tosubnets="10.20.0.0/16,10.24.10.0/24">
+      <direction name="Servers Belgium-France" fromsubnets="192.168.4.0/22" nofromsubnets="192.168.5.0/24" tosubnets="10.20.0.0/16,10.24.10.0/24">
+        <application name="web">80/tcp,8080/tcp</application>
+        <application name="secureweb">443/tcp</application>
+        <application name="mailreading">110/tcp,143/tcp</application>
+        <application name="windows">137-139/tcp,137-139/udp,445/tcp</application>
+        <services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
+        <protocols>tcp,udp,icmp</protocols>
+        <multicast/>
+        <tos/>
+        <total/>
+      </direction>
+      <direction name="Belgium-Internet only" fromsubnets="192.168.0.0/17" notosubnets="192.168.0.0/17,10.20.0.0/16,10.24.10.0/24">
         <application name="web">80/tcp,8080/tcp</application>
         <application name="secureweb">443/tcp</application>
         <application name="mailreading">110/tcp,143/tcp</application>

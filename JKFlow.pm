@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl 
+#!/usr/bin/perl 
 
 # ----------------- JKFlow.pm ----------------------
 
@@ -386,6 +386,20 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 			}
 		}
+		if (defined $refxml->{$direction}{'nofromsubnets'}) {
+			${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$refxml->{$direction}{'nofromsubnets'})) {
+				print "Adding nofromsubnets subnet $subnet \n";
+				${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
+			}
+		}
+		if (defined $refxml->{$direction}{'notosubnets'}) { 
+			${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$refxml->{$direction}{'notosubnets'})) {
+				print "Adding notosubnets subnet $subnet \n";
+				${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
+			}
+		}
 		if (defined $refxml->{$direction}{'application'}) { 
 			$ref->{$direction}{application}={};
 			pushApplications( 
@@ -513,7 +527,10 @@ my $which=shift;
 
 	foreach my $direction (keys %{$ref}) {
 		if ( (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
-			 &&  (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr))) ) {
+		&&  (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr))) 
+		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($dstaddr))) 
+		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($srcaddr))) )
+		{
 				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
 				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
@@ -522,7 +539,9 @@ my $which=shift;
 				countApplications(\%{$ref->{$direction}{'application'}},'out');
 		}
 		elsif ( (!defined $ref->{$direction}{'fromsubnets'} || (${$ref->{$direction}{'fromsubnets'}}->match_integer($dstaddr)))
-			 &&  (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($srcaddr))) ) {
+		&&  (!defined $ref->{$direction}{'tosubnets'} || (${$ref->{$direction}{'tosubnets'}}->match_integer($srcaddr)))
+		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($dstaddr)))
+		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($srcaddr))) ) {
 				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
 				#print "fromsubnet".${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)."\n";
     				#use Data::Dumper;
@@ -533,7 +552,6 @@ my $which=shift;
 	    	if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
         		countmulticasts(\%{$ref->{$direction}});
 		}
-		# Recursive logging, maybe mad or maybe powerfull, I don't know yet :-) 
 		countDirections(\%{$ref->{$direction}{'direction'}},$which);
 	}
 }
