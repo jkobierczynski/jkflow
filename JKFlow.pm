@@ -126,7 +126,8 @@ sub parseConfig {
 
 	use XML::Simple;
 	$config=XMLin('/usr/local/bin/JKFlow.xml',
-		forcearray=>['router','interface','subnet','site','network','direction','application','defineset','set']);
+		forcearray=>['router','interface','subnet','site','network','direction','application','defineset','set',
+				keyattr => { router => 'exporter'} forcearray=>['router']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
@@ -150,46 +151,68 @@ sub parseConfig {
 	}
 
 	#use Data::Dumper;
-	foreach my $routername (keys %{$config->{routers}{router}}) {
-		print "Routers: + router $routername\n";
-		if (defined $config->{routers}{router}{$routername}{localsubnets}) {
-			$JKFlow::mylist{routers}{router}{$routername}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
-			foreach my $subnet (split(/,/,$config->{routers}{router}{$routername}{localsubnets})) {
-				print "Routers: router $routername + localsubnets subnet $subnet\n";
-				$JKFlow::mylist{routers}{router}{$routername}{localsubnets}->add_string($subnet);
-			}
-		}
-		foreach my $router (split(/,/,$config->{routers}{router}{$routername}{routers})) {
-			print "Routers: router $routername + routerip $router\n";
-			$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
-		}
-		if (defined $config->{routers}{router}{$routername}{interface}) {
-			foreach my $interfacecode (keys %{$config->{routers}{router}{$routername}{interface}}) {
-				print "Routers: router $routername + interface $interfacecode\n";
-				if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{description}) {
-					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{description}=$config->{routers}{router}{$routername}{interface}{$interfacecode}{description};
-				}
-				if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{samplerate}) {
-					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=$config->{'router'}{$routername}{interface}{$interfacecode}{samplerate};
-				} else {
-					$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=1;
-				}
-				parseDirection (
-					\%{$config->{routers}{router}{$routername}{interface}{$interfacecode}},
-					\%{$JKFlow::mylist{router}{$routername}{interface}{$interfacecode}});
-			}
-		}
 
-		if (defined $config->{routers}{router}{$routername}{samplerate}) {
-			$JKFlow::mylist{router}{$routername}{samplerate}=$config->{routers}{router}{$routername}{samplerate};
-		} else {
-			$JKFlow::mylist{router}{$routername}{samplerate}=1;
+	if (defined $config->{routergroups}) {
+		if (defined $config->{routergroups}{routergroup}){
+			foreach my $routergroup (keys %{$config->{routergroups}{routergroup}}) {
+				print "Routergroup: $routergroup\n";
+				foreach my $exporter (keys %{$config->{routergroups}{routergroup}{$routergroup}{router}{exporter}}) {
+					print "Exporter: $exporter\n";
+					$JKFlow::mylist{routers}{router}{$exporter}=$routergroup;
+					foreach my $interface (keys %{$config->{routergroups}{routergroup}{$routergroup}{router}{exporter}{$exporter}{interface}}) {
+						$JKFlow::mylist{routers}{router}{$exporter}{$interface}=$routergroup;
+					}
+					if (defined $config->{routergroups}{routergroup}{$routergroup}{router}{exporter}{$exporter}{localsubnets}) {
+						$JKFlow::mylist{routers}{router}{$exporter}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+						foreach my $localsubnet (split (/,/,$config->{routergroups}{routergroup}{$routergroup}{router}{exporter}{$exporter}{localsubnets})) {
+							$JKFlow::mylist{routers}{router}{$exporter}{localsubnets}->add_string($localsubnet);
+						}
+					}
+				}
+			}
 		}
-		parseDirection (
-			\%{$config->{routers}{router}{$routername}},
-			\%{$JKFlow::mylist{router}{$routername}});
-			
-	}
+	}	
+
+	#foreach my $routername (keys %{$config->{routers}{router}}) {
+	#	print "Routers: + router $routername\n";
+	#	if (defined $config->{routers}{router}{$routername}{localsubnets}) {
+	#		$JKFlow::mylist{routers}{router}{$routername}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+	#		foreach my $subnet (split(/,/,$config->{routers}{router}{$routername}{localsubnets})) {
+	#			print "Routers: router $routername + localsubnets subnet $subnet\n";
+	#			$JKFlow::mylist{routers}{router}{$routername}{localsubnets}->add_string($subnet);
+	#		}
+	#	}
+	#	foreach my $router (split(/,/,$config->{routers}{router}{$routername}{routers})) {
+	#		print "Routers: router $routername + routerip $router\n";
+	#		$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
+	#	}
+	#	if (defined $config->{routers}{router}{$routername}{interface}) {
+	#		foreach my $interfacecode (keys %{$config->{routers}{router}{$routername}{interface}}) {
+	#			print "Routers: router $routername + interface $interfacecode\n";
+	#			if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{description}) {
+	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{description}=$config->{routers}{router}{$routername}{interface}{$interfacecode}{description};
+	#			}
+	#			if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{samplerate}) {
+	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=$config->{'router'}{$routername}{interface}{$interfacecode}{samplerate};
+	#			} else {
+	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=1;
+	#			}
+	#			parseDirection (
+	#				\%{$config->{routers}{router}{$routername}{interface}{$interfacecode}},
+	#				\%{$JKFlow::mylist{router}{$routername}{interface}{$interfacecode}});
+	#		}
+	#	}
+	#
+	#	if (defined $config->{routers}{router}{$routername}{samplerate}) {
+	#		$JKFlow::mylist{router}{$routername}{samplerate}=$config->{routers}{router}{$routername}{samplerate};
+	#	} else {
+	#		$JKFlow::mylist{router}{$routername}{samplerate}=1;
+	#	}
+	#	parseDirection (
+	#		\%{$config->{routers}{router}{$routername}},
+	#		\%{$JKFlow::mylist{router}{$routername}});
+	#		
+	#}
 
 	pushDirections (
 		\%{$config->{directions}{direction}},
@@ -489,6 +512,14 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$list;
 			}
 		}
+
+		if (defined $refxml->{$direction}{"routergroup"}) {
+			my $list=[];
+			$list=$JKFLow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}};
+			push @{$list},$ref->{$direction};
+			$JKFLow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=$list;
+		}
+
 		if ($refxml->{$direction}{'monitor'} eq 'yes') {
 			$ref->{$direction}{monitor}="Yes";
 		} else {
@@ -566,31 +597,60 @@ sub wanted {
 
 	}
 
-	# Counting for specific Routers
-	foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
-		$which = 'out';
-		if (defined $JKFlow::mylist{'router'}{$routername}{'localsubnets'}) {
-			if ($JKFlow::mylist{'router'}{$routername}{'localsubnets'}->match_integer($dstaddr)) {
-				$which = 'in';
-			} 
-		}
-		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
-			#Added Interfaces monitoring
-			if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}) {
-				countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}},'out');
-				countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'application'}},'out');
-				#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'direction'}},'out');
-			} 
-			if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}) {
-				countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}},'in');
-				countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'application'}},'in');
-				#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'direction'}},'in');
+	# Counting for Routers
+	if (defined $JKFlow::mylist{'router'}{$exporterip}) {
+		my $routergroup = $JKFlow::mylist{routers}{router}{$exporterip};
+		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{interface}) {
+			if (defined $JKFlow::mylist{routers}{router}{$exporterip}{interface}{$output_if}) {
+				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets($ref,'out');
+					countApplications(\%{$ref->{'application'}},'out');
+				}
 			}
-			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
-			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
-			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
+			if (defined $JKFlow::mylist{routers}{router}{$exporterip}{interface}{$input_if}) {
+				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets($ref,'in');
+					countApplications(\%{$ref->{'application'}},'in');
+				}
+			}
+		} else {
+			$which = 'out';
+			if ($JKFlow::mylist{routers}{router}{$exporterip}{'localsubnets'}->match_integer($dstaddr)) {
+				$which = 'in';
+			}
+			foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+				countpackets($ref,$which);
+				countApplications(\%{$ref->{'application'}},$which);
+			}
+			
 		}
 	}
+
+	# Counting for specific Routers
+	#foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
+	#	$which = 'out';
+	#	if (defined $JKFlow::mylist{'router'}{$routername}{'localsubnets'}) {
+	#		if ($JKFlow::mylist{'router'}{$routername}{'localsubnets'}->match_integer($dstaddr)) {
+	#			$which = 'in';
+	#		} 
+	#	}
+	#	if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
+	#		#Added Interfaces monitoring
+	#		if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}) {
+	#			countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}},'out');
+	#			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'application'}},'out');
+	#			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'direction'}},'out');
+	#		} 
+	#		if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}) {
+	#			countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}},'in');
+	#			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'application'}},'in');
+	#			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'direction'}},'in');
+	#		}
+	#		countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
+	#		countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
+	#		#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
+	#	}
+	#}
 	countDirections2();
 
     return 1;
