@@ -1019,9 +1019,19 @@ EOF
 	$ref->{'scoreboard'}{hosts}{'dst'}{'flows'}{$dstip}{$which} ++;
 	$ref->{'scoreboard'}{hosts}{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
 	$ref->{'scoreboard'}{hosts}{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
+	if (! defined $ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc} ) {
+		$ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}=$dstport;
+	} elsif ($ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}!=$dstport) {
+		$ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}="*";
+	}
 	$ref->{'scoreboard'}{hosts}{'src'}{'flows'}{$srcip}{$which} ++;
 	$ref->{'scoreboard'}{hosts}{'src'}{'bytes'}{$srcip}{$which} += $bytes;
 	$ref->{'scoreboard'}{hosts}{'src'}{'pkts'}{$srcip}{$which} += $pkts;
+	if (! defined $ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc} ) {
+		$ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}=$srcport;
+	} elsif ($ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}!=$srcport) {
+		$ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}="*";
+	}
 
 EOF
 	}
@@ -1031,9 +1041,19 @@ EOF
 	$ref->{'scoreboard'}{ports}{'dst'}{'flows'}{$dstport}{$which} ++;
 	$ref->{'scoreboard'}{ports}{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
 	$ref->{'scoreboard'}{ports}{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
+	if (! defined $ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc} ) {
+		$ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}=$dstip;
+	} elsif ($ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}!=$dstip) {
+		$ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}="*";
+	}
 	$ref->{'scoreboard'}{ports}{'src'}{'flows'}{$srcport}{$which} ++;
 	$ref->{'scoreboard'}{ports}{'src'}{'bytes'}{$srcport}{$which} += $bytes;
 	$ref->{'scoreboard'}{ports}{'src'}{'pkts'}{$srcport}{$which} += $pkts;
+	if (! defined $ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc} ) {
+		$ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}=$srcip;
+	} elsif ($ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}!=$srcip) {
+		$ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}="*";
+	}
 
 EOF
 	}
@@ -1387,7 +1407,8 @@ sub scoreboard {
 								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in} * $samplerate,
 								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out} * $samplerate,
 								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in} * $samplerate,
-								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $samplerate
+								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $samplerate,
+								'ipsrc' => $ref->{$type}{$srcdst}{$item}{ipsrc}
 							};
 						}
 
@@ -1510,6 +1531,12 @@ sub countAggdata($) {
 			$report->{aggdata}{$porthost}{'pktsout'}  += $newaggdata->{$porthost}{'pktsout'};
 			$report->{aggdata}{$porthost}{'flowsin'}  += $newaggdata->{$porthost}{'flowsin'};
 			$report->{aggdata}{$porthost}{'flowsout'} += $newaggdata->{$porthost}{'flowsout'};
+			if (!defined $report->{aggdata}{$porthost}{'ipsrc'}) {
+				$report->{aggdata}{$porthost}{'ipsrc'}=$newaggdata->{$porthost}{'ipsrc'};
+			} elsif ($report->{aggdata}{$porthost}{'ipsrc'}!=$newaggdata->{$porthost}{'ipsrc'}) {
+				$report->{aggdata}{$porthost}{'ipsrc'}='*';
+			}
+			#print "IPSRC".$report->{aggdata}{$porthost}{'ipsrc'}."\n";
 		}
 		# Increment counter
 		$report->{aggdata}{'numresults'}++;
@@ -1583,7 +1610,8 @@ sub writeAggScoreboard ()
 
 	    my $row = 1;
 	    $table->addRow('<b>rank</b>',
-			   "<b>$dir Address</b>",
+			   "<b>Address</b>",
+			   "<b>Address</b>",
 			   '<b>bits/sec in</b>',
 			   '<b>bits/sec out</b>',
 			   '<b>pkts/sec in</b>',
@@ -1616,6 +1644,8 @@ sub writeAggScoreboard ()
 		$table->addRow( sprintf("#%d",$i+1),
 				# $dnscache{$ip},      
 				$ip,			# Host / Port address
+				
+				$data{$ip}->{'ipsrc'},	# Port / Host address 
 				
 				# Bits/sec in
 				scale("%.1f", ($data{$ip}->{'bytesin'}*8) /
