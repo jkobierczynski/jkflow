@@ -119,8 +119,8 @@ sub showList {
 
     print $q->td( { -align => 'center' }, "Global" );
     print $q->td( { -align => 'center' }, "All" );
-    print $q->td( $q->checkbox( -name => "Global",
-				-value => "All",
+    print $q->td( $q->checkbox( -name => "total_all",
+				-value => "1",
 				-label => 'Yes') );
 	 
     print $q->end_Tr();
@@ -151,7 +151,7 @@ sub showList {
 
  	    print $q->td( { -align => 'center' }, "total_".$type );
 
-            print $q->td( $q->checkbox( -name => $type."_total",
+            print $q->td( $q->checkbox( -name => "total_".$type,
 				    -value => 1,
 				    -label => 'Yes') );
 	    print $q->end_Tr();
@@ -315,6 +315,7 @@ sub showMenu {
 	if ($type eq 'total_router') { @list = ( 'total_router' ); } 
 	if ($type eq 'subnet') { @list = param("subnet") } 
 	if ($type eq 'total_subnet') { @list = ( 'total_subnet' ); } 
+
 	foreach my $r (  sort @list ) {
 		print $q->start_Tr;
 		print $q->td( { -align => 'center' }, $q->b($r),
@@ -324,18 +325,21 @@ sub showMenu {
 			print $q->td( $q->checkbox(-name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
 			print $q->td( $q->scrolling_list( -name => "${r}_service",-values => [sort &getServiceList($type."_".$r)],-size => 5,-multiple => 'true' ) );
 			print $q->td( $q->checkbox( -name => "${r}_all_services",-value => '1',-label => 'Yes' ) );
-		} else {
-			print $q->td( $q->scrolling_list( -name => "${r}_protocol",-values => [ 'multicast' ],-size => 1,-multiple => 'true' ) );
-			print $q->td( $q->checkbox( -name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
-			print $q->td( '&nbsp;' );
-			print $q->td( '&nbsp;' );
-		}
-	        if ($type eq 'total_router' || $type eq 'total_subnet') {
-			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type)],-size => 5,-multiple => 'true' ) );
-		} else {
 			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type."_".$r)],-size => 5,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_tos",-value => '1',-label => 'Yes' ) );
+		} else {
+			print $q->td( $q->scrolling_list( -name => "${r}_protocol",-values => [sort &getProtocolList($type)],-size => 1,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_protocols",-value => '1',-label => 'Yes' ) );
+			print $q->td( $q->scrolling_list( -name => "${r}_service",-values => [sort &getServiceList($type)],-size => 5,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_services",-value => '1',-label => 'Yes' ) );
+			print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type)],-size => 5,-multiple => 'true' ) );
+			print $q->td( $q->checkbox( -name => "${r}_all_tos",-value => '1',-label => 'Yes' ) );
 		}
-		print $q->td( $q->checkbox( -name => "${r}_all_tos",-value => '1',-label => 'Yes' ) );
+	        #if ($type eq 'total_router' || $type eq 'total_subnet') {
+		#	print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type)],-size => 5,-multiple => 'true' ) );
+		#} else {
+		#	print $q->td( $q->scrolling_list( -name => "${r}_tos",-values => [sort &getTosList($type."_".$r)],-size => 5,-multiple => 'true' ) );
+		#}
 		print $q->td( $q->checkbox( -name => "${r}_total",-value => '1',-label => 'Yes') );
 		print $q->end_Tr;
 	}
@@ -438,8 +442,8 @@ sub getSubdir {
 sub getFilenames {
     foreach my $type ('network','router','subnet') {
         foreach my $r (keys %{$subdir{$type}}) {
-            foreach my $p (param("${r}_protocol")) { 
-                $subdir{$type}{$r}{'protocol'}{$p}="${rrddir}/${type}_${r}/protocol_${p}.rrd";
+ 	    foreach my $p (param("${r}_protocol")) { 
+		$subdir{$type}{$r}{'protocol'}{$p}="${rrddir}/${type}_${r}/protocol_${p}.rrd";
                 -f $subdir{$type}{$r}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{$type}{$r}{'protocol'}{$p}");
             }
             if ( param("${r}_all_protocols")) {
@@ -490,15 +494,41 @@ sub getFilenames {
 		if ( param("${r}_tos_${t}")) {
 	 		$subdir{$r}{'tos'}{$t}="${rrddir}/${r}/tos_${t}.rrd";
 			-f $subdir{$r}{'tos'}{$t} or &browserDie("Cannot find file $subdir{$r}{'tos'}{$t}");
-			}
   		}
-        if ( param("${r}_protocol_multicast") || param("${r}_all_protocols")) {
-		$subdir{$r}{'protocol'}{'multicast'}="${rrddir}/${r}/protocol_multicast.rrd";
-		-f $subdir{$r}{'protocol'}{'multicast'} or &browserDie("Cannot find file $subdir{$r}{'protocol'}{'multicast'}");
+        }
+	if ( param("${r}_all_protocols")) {
+		foreach my $p (getProtocolList($r)) {
+			$subdir{$r}{'protocol'}{$p}="${rrddir}/${r}/protocol_${p}.rrd";
+			-f $subdir{$r}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{$r}{'protocol'}{$p}");
+		}
 	}
+	foreach my $p (getProtocolList($r)) { 
+		if ( param("${r}_protocol_${p}")) {
+			$subdir{$r}{'protocol'}{$p}="${rrddir}/${r}/protocol_${p}.rrd";
+ 	               -f $subdir{$r}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{$r}{'protocol'}{$p}");
+		}
+	}
+        if ( param("${r}_all_services")) {
+                foreach my $s (getServiceList($r)) {
+      			$subdir{$r}{'service'}{$s}="${rrddir}/${r}/service_${s}";
+			-f $subdir{$r}{'service'}{$s}.'_src.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
+			-f $subdir{$r}{'service'}{$s}.'_dst.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
+                }
+        }
+        foreach my $s (param("${r}_service")) { 
+                $subdir{$r}{'service'}{$s}="${rrddir}/${r}/service_${s}";
+                -f $subdir{$r}{'service'}{$s}.'_src.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
+                -f $subdir{$r}{'service'}{$s}.'_dst.rrd' or &browserDie("Cannot find file $subdir{$r}{'service'}{$s}");
+        }
         if ( param("${r}_total") || param("${r}_tos") || param("${r}_all_tos") || param("${r}_protocol_multicast") || param("${r}_all_protocols") ) {
 		$subdir{$r}{'total'}="${rrddir}/${r}/total.rrd";
 		-f $subdir{$r}{'total'} or &browserDie("Cannot find file $subdir{$r}{'total'}");
+	}
+    }
+    if ( param("all_all_protocols")) {
+	foreach my $p (getProtocolList('')) {
+		$subdir{'all'}{'protocol'}{$p}="${rrddir}/protocol_${p}.rrd";
+		-f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
 	}
     }
     foreach my $p (getProtocolList('')) { 
@@ -507,10 +537,6 @@ sub getFilenames {
         -f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
         }
     }
-#    foreach my $p (param("all_all_protocols")) {
-#	$subdir{'all'}{'protocol'}="${rrddir}/protocol_${p}.rrd";
-#	-f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
-#    }
     foreach my $s (getServiceList('')) { 
         if ( param("all_service_${s}")) {
         $subdir{'all'}{'service'}{$s}="${rrddir}/service_${s}";
