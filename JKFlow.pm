@@ -297,8 +297,8 @@ sub parseConfig {
 	if (defined $config->{subnet}{total_subnet}) {
 		$JKFlow::mylist{'total_subnet'} = {};
 	}		
-	use Data::Dumper;
-	print "Data:".Dumper($JKFlow::mylist{subnets})."\n";
+	#use Data::Dumper;
+	#print "Data:".Dumper($JKFlow::mylist{subnets})."\n";
 	#print "Data:".Dumper($config)."\n";
 }
 
@@ -428,66 +428,34 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		#NEW CODE
 		foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
 			foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
 				print "Subnets: FROM=".$fromsubnet." TO=".$tosubnet."\n";
-				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$ref->{$direction};
+				my $list=[];
+				my $nofromsubnets=[];
+				my $notosubnets=[];
+				if (defined $JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}) {
+					$list=$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet};
+				}
+				foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
+					push @{$nofromsubnets},$nofromsubnet;
+				}
+				foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
+					push @{$notosubnets},$notosubnet;
+				}
+				push @{$list},{ 
+				nofromsubnets=>$nofromsubnets,
+				notosubnets=>$notosubnets,
+				ref=>$ref->{$direction}
+				};
+				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$list;
 				if ($refxml->{$direction}{'monitor'} eq 'yes') {
-					$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}{monitor}="Yes";
+					$ref->{$direction}{monitor}="Yes";
+				} else {
+					$ref->{$direction}{monitor}="No";
 				}
 			}
 		}
-
-		#foreach my $nofromsubnet (split /,/, $refxml->{$direction}{'nofromsubnets'}) {
-		#	my @list = ();
-		#	if (defined $JKFlow::fromtrie->match_string($nofromsubnet)) {
-		#		my @list = @{$JKFlow::fromtrie->match_string($nofromsubnet)};
-		#	}
-		#	$JKFlow::fromtrie->add_string($nofromsubnet,\@list);
-		#}
-
-		#foreach my $fromsubnet (split /,/, $refxml->{$direction}{'fromsubnets'}) {
-		#	my %seen = ();
-		#	my @list = ();
-		#	if (defined $JKFlow::fromtrie->match_string($fromsubnet)) {
-		#		my @tmplist = @{$JKFlow::fromtrie->match_string($fromsubnet)};
-		#		if (defined $tmplist[0]) {
-		#			push @list,  @tmplist;
-		#		}
-		#	}
-		#	@list = grep { ! $seen{$_} ++ } ( @list, $fromsubnet );
-		#	print "FROMSUBNET=$fromsubnet\n";
-		#	use Data::Dumper;
-		#	print Dumper(@list)."\n";
-		#	$JKFlow::fromtrie->add_string($fromsubnet,\@list);
-		#}
-
-		#foreach my $notosubnet (split /,/, $refxml->{$direction}{'notosubnets'}) {
-		#	my @list = ();
-                #        if (defined $JKFlow::totrie->match_string($notosubnet)) {
-		#		my @list = @{$JKFlow::totrie->match_string($notosubnet)};
-		#	}
-		#	$JKFlow::totrie->add_string($notosubnet,\@list);
-		#}
-
-		#foreach my $tosubnet (split /,/, $refxml->{$direction}{'tosubnets'}) {
-		#	my %seen = ();
-		#	my @list = ();
-                #     	if (defined $JKFlow::totrie->match_string($tosubnet)) {
-		#		my @tmplist = @{$JKFlow::totrie->match_string($tosubnet)};
-		#		if (defined $tmplist[0]) {
-		#			push @list,  @tmplist;
-		#		}
-		#	}
-		#	@list = grep { ! $seen{$_} ++ } ( @list, $tosubnet );
-		#	print "TOSUBNET=$tosubnet\n";
-		#	use Data::Dumper;
-		#	print Dumper(@list)."\n";
-		#	$JKFlow::totrie->add_string($tosubnet,\@list);
-		#}
-		#END NEW CODE
-
 
 		if (defined $refxml->{$direction}{'application'}) { 
 			$ref->{$direction}{application}={};
@@ -525,8 +493,6 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		if (defined $refxml->{$direction}{'total'}) {
 			$ref->{$direction}{'total'}={};
 		}
-		#print "refxml=".Dumper($refxml)."\n";
-		#print "ref=".Dumper($ref)."\n";
 	}
 }
 
@@ -537,55 +503,28 @@ my ($srv,$proto,$start,$end,$tmp,$i,$subnet);
 
 		foreach $subnet (@{$refxml->{'subnet'}}) {
 
-
-			#if (defined $subnet->{'nosubnets'}) { 
-			#	foreach my $nosubnet (split /,/, $subnet->{'nosubnets'}) {
-			#		my @list = ();
-			#		if (defined $ref->match_string($nosubnet)) {
-			#			my @list = @{$ref->match_string($nosubnet)};
-			#		}
-			#		use Data::Dumper;
-			#		print "PUSH NOSUBNET:".$nosubnet." = ".Dumper(@list). "\n";
-			#		$ref->add_string($nosubnet,\@list);
-			#	}
-			#}
-
 			foreach my $addsubnet (split /,/, $subnet->{'subnets'}) {
 				my %seen = ();
-				my @list = ();
-				my (@includelist,@excludelist);
+				my $includedlist = [];
+				my $excludedlist = [];
 				if (defined $ref->match_string($addsubnet)) {
-					use Data::Dumper;
-					print "READ SUBNET:".Dumper($ref->match_string($addsubnet))."\n";
-					@includedlist = @{${$ref->match_string($addsubnet)}{included}};
-					@excludedlist = @{${$ref->match_string($addsubnet)}{excluded}};
-					if (defined $includedlist[0]) {
-						push @list,  @includedlist;
-					}
+					push @{$includedlist}, @{${$ref->match_string($addsubnet)}{included}};
+					push @{$excludedlist}, @{${$ref->match_string($addsubnet)}{excluded}};
 				}
-				@list = grep { ! $seen{$_} ++ } ( @list, $addsubnet );
-				use Data::Dumper;
-				print "PUSH SUBNET:".$addsubnet." = ".Dumper({included=>\@list,excluded=>\@excludedlist})."\n";
-				$ref->add_string($addsubnet,{included=>\@list,excluded=>\@excludedlist});
+				@{$includedlist} = grep { ! $seen{$_} ++ } ( @{$includedlist}, $addsubnet );
+				$ref->add_string($addsubnet,{included=>$includedlist,excluded=>$excludedlist});
 			}
 			
 			foreach my $addsubnet (split /,/, $subnet->{'nosubnets'}) {
 				my %seen = ();
-				my @list = ();
-				my (@includelist,@excludelist);
+				my $includedlist = [];
+				my $excludedlist = [];
 				if (defined $ref->match_string($addsubnet)) {
-					use Data::Dumper;
-					print "READ NOSUBNET:".Dumper($ref->match_string($addsubnet))."\n";
-					@includedlist = @{${$ref->match_string($addsubnet)}{included}};
-					@excludedlist = @{${$ref->match_string($addsubnet)}{excluded}};
-					if (defined $excludedlist[0]) {
-						push @list,  @excludedlist;
-					}
+					push @{$includedlist}, @{${$ref->match_string($addsubnet)}{included}};
+					push @{$excludedlist}, @{${$ref->match_string($addsubnet)}{excluded}};
 				}
-				@list = grep { ! $seen{$_} ++ } ( @list, $addsubnet );
-				use Data::Dumper;
-				print "PUSH NOSUBNET:".$addsubnet." = ".Dumper({included=>\@includedlist,excluded=>\@list})."\n";
-				$ref->add_string($addsubnet,{included=>\@includedlist,excluded=>\@list});
+				@{$excludedlist} = grep { ! $seen{$_} ++ } ( @{$excludedlist}, $addsubnet );
+				$ref->add_string($addsubnet,{included=>$includedlist,excluded=>$excludedlist});
 			}
 			pushDirections2($subnet,$ref);
 		}
@@ -622,7 +561,7 @@ sub wanted {
 		}
 		countpackets(\%{$JKFlow::mylist{'all'}},$which);
 		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
-		countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
+		#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
 
 	}
 
@@ -637,7 +576,7 @@ sub wanted {
 		if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
 			countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
 			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
 		}
 	}
 	# Couting for specific Subnets
@@ -654,13 +593,13 @@ sub wanted {
 			$which = 'out';
 			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
 		}
 		elsif ($which eq 'in' || ${$JKFlow::mylist{'subnet'}{$subnetname}{'subnets'}}->match_integer($dstaddr)) {
 			$which = 'in';
 			countpackets(\%{$JKFlow::mylist{'subnet'}{$subnetname}},$which);
 			countApplications(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}},$which);
-			countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
+			#countDirections(\%{$JKFlow::mylist{'subnet'}{$subnetname}{'direction'}},$which);
 		}
 	}
 	# Counting Directions for specific Networks
@@ -668,7 +607,7 @@ sub wanted {
 	# the primary intended function of Networks is to be a compound of several
 	# Subnets/Routers
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-		countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
+		#countDirections(\%{$JKFlow::mylist{'network'}{$network}{'direction'}},$which);
 	}
 	countDirections2();
 
@@ -685,7 +624,7 @@ my $which=shift;
 		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($dstaddr))) 
 		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($srcaddr))) )
 		{
-				if (defined $ref->{$direction}{monitor}) {
+				if ($ref->{$direction}{monitor} eq "Yes") {
 					print "D1 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
 				}
 				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
@@ -700,7 +639,7 @@ my $which=shift;
 		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($dstaddr)))
 		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($srcaddr))) ) 
 		{
-				if (defined $ref->{$direction}{monitor}) {
+				if ($ref->{$direction}{monitor} eq "Yes") {
 					print "D1 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
 				}
 				#print "tosubnet".${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr).",";
@@ -719,9 +658,6 @@ sub countDirections2 {
 	my $srcsubnets;
 	my $dstsubnets;
 	
-	my %fromtriematch;
-	my %totriematch;
-
 	my $fromtriematch = $JKFlow::fromtrie->match_integer($srcaddr);
 	my $totriematch = $JKFlow::totrie->match_integer($dstaddr);
 
@@ -729,12 +665,21 @@ sub countDirections2 {
 		if ((defined $totriematch) && (defined ($dstsubnets = $totriematch->{included}))) {
 			foreach my $srcsubnet (@{$srcsubnets}) {
 				foreach my $dstsubnet (@{$dstsubnets}) {
+					#print "SrcSubnet=".$srcsubnet."\n";
+					#print "DstSubnet=".$dstsubnet."\n";
 					if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}) {
-						if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{monitor}) {
-							print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
+						foreach $direction (@{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}}) {
+							my %i={},%j={};
+							if (	
+							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
+							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
+								if ($direction->{ref}{monitor} eq "Yes") {
+									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet \n"; 
+								}
+								countpackets (\%{$direction->{ref}},'out');
+								countApplications (\%{$direction->{ref}{application}},'out');
+							}
 						}
-						countpackets (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}},'out');
-						countApplications (\%{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}{application}},'out');
 					}
 				}
 			}
@@ -748,12 +693,21 @@ sub countDirections2 {
         	if ((defined $totriematch) && (defined ($srcsubnets = $totriematch->{included}))) {
         		foreach my $dstsubnet (@{$dstsubnets}) {
                 		foreach my $srcsubnet (@{$srcsubnets}) {
+					#print "DstSubnet=".$dstsubnet."\n";
+					#print "SrcSubnet=".$srcsubnet."\n";
 					if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}) {
-						if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}{monitor}) {
-							print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
+						foreach $direction (@{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}}) {
+							my %i={},%j={};
+							if (
+							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
+							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
+								if ($direction->{ref}{monitor} eq "Yes") {
+									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet \n"; 
+								}
+                        					countpackets (\%{$direction->{ref}},'in');
+                        					countApplications (\%{$direction->{ref}{application}},'in');
+							}
 						}
-                        			countpackets (\%{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}},'in');
-                        			countApplications (\%{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}{application}},'in');
 					}
 				}
 			}
