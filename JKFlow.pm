@@ -1125,7 +1125,9 @@ sub reporttorrd {
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
 	# Create a new rrd if one doesn't exist
-	$self->createGeneralRRD($file,
+	if (! -f $file) {
+		print "Creating RRD-File ".$file."\n";
+		$self->createGeneralRRD($file,
 			    qw(
 			       ABSOLUTE in_bytes
 			       ABSOLUTE out_bytes
@@ -1133,8 +1135,8 @@ sub reporttorrd {
 			       ABSOLUTE out_pkts
 			       ABSOLUTE in_flows
 			       ABSOLUTE out_flows
-			       )
-			    ) unless -f $file; 
+			       ));
+	}
 
 	foreach my $i ('bytes','pkts','flows') {
 		foreach my $j ('in','out') {
