@@ -7,6 +7,7 @@
     <application name="snmp">161-162/udp</application>
     <services>20-23/tcp,25/tcp,102/tcp,110/tcp,119/tcp,143/tcp</services>
     <protocols>tcp,udp,icmp</protocols>
+    <ftp/>
     <multicast/>
     <tos/>
     <total/>

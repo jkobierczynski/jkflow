@@ -144,6 +144,9 @@ sub parseConfig {
 				$config->{all}{application},
 				\%{$JKFlow::mylist{'all'}{'application'}});
 		}
+		if (defined $config->{all}{ftp}) {
+			$JKFlow::mylist{'all'}{'ftp'}={};
+		}
 		if (defined $config->{all}{multicast}) {
 			$JKFlow::mylist{'all'}{'multicast'}={};
 		}
@@ -184,6 +187,9 @@ sub parseConfig {
 			pushApplications( 
 				$config->{routers}{router}{$routername}{application},
 				\%{$JKFlow::mylist{'router'}{$routername}{'application'}});
+		}
+		if (defined $config->{routers}{router}{$routername}{ftp}) {
+			$JKFlow::mylist{'router'}{$routername}{'ftp'}={};
 		}
 		if (defined $config->{routers}{router}{$routername}{multicast}) {
 			$JKFlow::mylist{'router'}{$routername}{'multicast'}={};
@@ -226,6 +232,9 @@ sub parseConfig {
 			pushApplications( 
 				$config->{subnets}{subnet}{$subnetname}{application},
 				\%{$JKFlow::mylist{'subnet'}{$subnetname}{'application'}});
+		}
+		if (defined $config->{subnets}{subnet}{$subnetname}{ftp}) {
+			$JKFlow::mylist{'subnet'}{$subnetname}{'ftp'}={};
 		}
 		if (defined $config->{subnets}{subnet}{$subnetname}{multicast}) {
 			$JKFlow::mylist{'subnet'}{$subnetname}{'multicast'}={};
@@ -424,6 +433,9 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				$refxml->{$direction}{'direction'},
 				$ref->{$direction}{'direction'});
 		}
+		if (defined $refxml->{$direction}{'ftp'}) {
+			$ref->{$direction}{'ftp'}={};
+		}
 		if (defined $refxml->{$direction}{'multicast'}) {
 			$ref->{$direction}{'multicast'}={};
 		}
@@ -618,6 +630,49 @@ sub countpackets {
 			$ref->{'service'}{$protocol}{$srcport}{'src'}{$which}{'pkts'} += $pkts;
 		}
 	}
+	if (defined $ref->{'ftp'}) {
+       		countftp(\%{$ref->{'ftp'}});
+	}
+}
+
+sub countftp {
+	my $ref = shift;
+	if (	($srcport == 21) || ($dstport == 21) 
+		|| ($srcport == 20) || ($dstport == 20) 
+		|| (($srcport >= 1024) && ($dstport >= 1024))) {
+		if ( 	(($srcport >= 1024) && ($dstport >=1024))
+			|| ($srcport == 20) || ($dstport == 20)	) {
+			if ( defined $ref->{cache}{"$dstaddr:$srcaddr"} ) {
+				$ref->{'dst'}{$which}{'flows'}++;
+				$ref->{'dst'}{$which}{'bytes'} += $bytes;
+				$ref->{'dst'}{$which}{'pkts'} += $pkts;
+				use Data::Dumper;
+				print Dumper($ref->{cache})."\n";
+				$ref->{cache}{"$dstaddr:$srcaddr"} = $endtime;
+			} elsif ( defined $ref->{cache}{"$srcaddr:$dstaddr"} ) {
+				$ref->{'src'}{$which}{'flows'}++;
+				$ref->{'src'}{$which}{'bytes'} += $bytes;
+				$ref->{'src'}{$which}{'pkts'} += $pkts;
+				use Data::Dumper;
+				print Dumper($ref->{cache})."\n";
+				$ref->{cache}{"$srcaddr:$dstaddr"} = $endtime;
+			} 
+		} elsif ($dstport == 21) {
+			$ref->{'dst'}{$which}{'flows'}++;
+			$ref->{'dst'}{$which}{'bytes'} += $bytes;
+			$ref->{'dst'}{$which}{'pkts'} += $pkts;
+			if (!defined $ref->{cache}{"$dstaddr:$srcaddr"}) {
+				$ref->{cache}{"$dstaddr:$srcaddr"}=0;
+			}
+		} elsif ($srcport == 21) {
+			$ref->{'src'}{$which}{'flows'}++;
+			$ref->{'src'}{$which}{'bytes'} += $bytes;
+			$ref->{'src'}{$which}{'pkts'} += $pkts;
+			if (!defined $ref->{cache}{"$srcaddr:$dstaddr"}) {
+				$ref->{cache}{"$srcaddr:$dstaddr"}=0;
+			}
+		}	
+	}
 }
 
 sub countmulticasts {
@@ -793,6 +848,20 @@ sub reporttorrdfiles {
 			foreach my $application (keys %{$ref->{'application'}}) {
   	     			$file = $JKFlow::OUTDIR. $dir . "/service_" . $application . "_" . $src . ".rrd";
 				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}});
+			}
+		}
+	}
+
+	if (defined $ref->{'ftp'}) {	
+		foreach my $src ('src','dst') { 
+  	     		$file = $JKFlow::OUTDIR. $dir . "/service_ftp_" . $src . ".rrd";
+			reporttorrd($self,$file,\%{$ref->{'ftp'}{$src}});
+		}
+		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
+			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 30*60 ||
+			    $self->{filetime}-$ref->{'ftp'}{cache}{$pair} < -5 * 60 ) {
+				delete($ref->{'ftp'}{cache}{$pair});
+				print "Deleted FTP-session: $pair \n";	
 			}
 		}
 	}
