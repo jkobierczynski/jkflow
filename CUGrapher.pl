@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#! /usr/local/bin/perl -w
 
 # CUGrapher.pl
 # $Revision$
@@ -178,7 +178,7 @@ sub showMenu {
 		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
 		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
 		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
-		  $q->td( i('Network') ),
+#		  $q->td( i('Network') ),
 		  $q->td( i('Total') ) );    
 
     print $q->start_Tr;
@@ -213,10 +213,11 @@ sub showMenu {
 				-value => '1',
 				-label => 'Yes' ) );
 
-    print $q->td( $q->scrolling_list( -name => "all_network",
-				      -values => [sort &getNetworkList()],
-				      -size => 5,
-			              -multiple => 'true' ) );
+# Will become obselete after implementing grouping of subnets and routers
+#print $q->td( $q->scrolling_list( -name => "all_network",
+#				      -values => [sort &getNetworkList()],
+#				      -size => 5,
+#			              -multiple => 'true' ) );
 	
     print $q->td( $q->checkbox( -name => "all_total",
 				    -value => '1',
@@ -266,8 +267,13 @@ sub showMenu {
 		print $q->td( $q->checkbox( -name => "${r}_all_protocols",
 					    -value => '1',
 					    -label => 'Yes' ) );
-	        print $q->td( '&nbsp;' );
-	        print $q->td( '&nbsp;' );
+		print $q->td( $q->scrolling_list( -name => "${r}_service",
+					  -values => [sort &getServiceList($type)],
+					  -size => 5,
+					  -multiple => 'true' ) );
+		print $q->td( $q->checkbox( -name => "${r}_all_services",
+						-value => '1',
+				  		-label => 'Yes' ) );
 	}
         if ($type eq 'total_router' || $type eq 'total_subnet') {
 		print $q->td( $q->scrolling_list( -name => "${r}_tos",
@@ -283,7 +289,7 @@ sub showMenu {
 	print $q->td( $q->checkbox( -name => "${r}_all_tos",
 				    -value => '1',
 				    -label => 'Yes' ) );
-        print $q->td( '&nbsp;' );
+#        print $q->td( '&nbsp;' );
 	print $q->td( $q->checkbox( -name => "${r}_total",
 				    -value => '1',
 				    -label => 'Yes') );

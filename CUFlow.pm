@@ -669,7 +669,7 @@ sub summarize {
    my $sumref = shift;
    my $addref = shift;
    my $typeos;
-   
+  
    foreach my $type ('bytes','pkts','flows') {
       foreach my $which ('in','out') {
          foreach my $protocol (keys %{$addref->{'protocol'}}) { 
@@ -685,6 +685,8 @@ sub summarize {
          $sumref->{'multicast'}{'total'}{$which}{$type} 
 		+= $addref->{'multicast'}{'total'}{$which}{$type};
          foreach my $typeos ('normal','other') {
+	    $sumref->{'tos'}{$typeos}{$which}{$type}
+			+= $addref->{'tos'}{$typeos}{$which}{$type};
             foreach my $protocol (keys %{$addref->{'protocol'}}) {
          	$sumref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type}
 			+= $addref->{'protocol'}{$protocol}{'tos'}{$typeos}{$which}{$type};
@@ -692,6 +694,9 @@ sub summarize {
             $sumref->{'multicast'}{'tos'}{$typeos}{$which}{$type} 
  		+= $addref->{'multicast'}{'tos'}{$typeos}{$which}{$type};
          }
+         $sumref->{'total'}{$which}{$type} 
+		+= $addref->{'total'}{$which}{$type};
+	 $sumref->{'tos'}{$which}{$type};
       }
    }
 }   
@@ -731,7 +736,6 @@ sub reporttorrdfiles {
              }
 	}
     }
-    print "File : $file  -> @values .\n";
     $self->updateRRD($file, @values);
     foreach my $tos ('normal','other') {
     	@values = ();
@@ -758,7 +762,6 @@ sub reporttorrdfiles {
              	     }
                 }
             }
-        print "File : $file  -> @values .\n";
     	$self->updateRRD($file, @values);
     }
     
@@ -890,6 +893,8 @@ sub report {
 	}
     }
 
+    reporttorrdfiles($self,"",\%CUFlow::myalllist);
+
     if (! -d $CUFlow::OUTDIR."/total_router" ) {
     mkdir($CUFlow::OUTDIR."/total_router",0755);
     }
@@ -898,28 +903,20 @@ sub report {
     }
 
     foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
-      print "Summarizing routers\n";
       summarize(\%CUFlow::myrouterlist,\%{$CUFlow::myrouterlist{'router'}{$rt}});
     }
     foreach my $sn (keys %{$CUFlow::mysubnetlist{'subnet'}}) {
-      print "Summarizing Subnets\n";
       summarize(\%CUFlow::mysubnetlist,\%{$CUFlow::mysubnetlist{'subnet'}{$sn}});
     }
 
-    use Data::Dumper;
-    print Dumper(%CUFlow::myrouterlist)."\n";
-	
-    reporttorrdfiles($self,"",\%CUFlow::myalllist);
     reporttorrdfiles($self,"/total_router",\%CUFlow::myrouterlist);
     reporttorrdfiles($self,"/total_subnet",\%CUFlow::mysubnetlist);
     foreach my $rt (keys %{$CUFlow::myrouterlist{'router'}}) {
-        print("Router:".$CUFlow::myrouterlist{$rt}{'name'}."\n");
     	reporttorrdfiles($self,"/router_".$CUFlow::myrouterlist{$rt}{'name'},\%{$CUFlow::myrouterlist{'router'}{$rt}});
     }
 
     foreach my $sn (keys %{$CUFlow::mysubnetlist{'subnet'}}) {
         ($subnetdir=$sn) =~ s/\//_/g;
-        print("Subnet:$subnetdir\n");
      	reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$CUFlow::mysubnetlist{'subnet'}{$sn}});
     }
 
