@@ -13,8 +13,12 @@ use XML::Simple;
 
 ### Local settings ###
 
+### Important: check the %definedcolors keys with /etc/services, or
+### the default colors won't work! (these are defined for RedHat 9.0/Fedora)
+
 # directory with rrd files
-my $rrddir = "/var/flows/reports/rrds";
+# don't forget the trailing slash in $rrddir!
+my $rrddir = "/var/flows/reports/rrds/";
 # default number of hours to go back
 my $hours = 48;
 # duration of graph, starting from $hours ago
@@ -108,9 +112,10 @@ my %definedcolors =	(
 			'tcp_pop3' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
 			'tcp_x400' =>	 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_iso-tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
+			'tcp_iso_tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_smtp' => 		{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_nntp' =>		{src => 0xC09010, dst => 0xD0A040 }, # Brown
-			'total' => 		{src => 0x000000 } # Black
+			'total' => 		{src => 0x00000F } # Black
 );
 
 
@@ -583,7 +588,7 @@ sub subreport {
 	# CDEFs for each protocol
 	$str1 = 'CDEF:'.&cleanDEF("${r}_other_protocol_in_pct").'=100';
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_protocol_out_pct").'=100';
-	foreach my $p ( keys %{$ref->{'protocol'}} ) {
+	foreach my $p (sort keys %{$ref->{'protocol'}} ) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
 				'DEF:'.&cleanDEF("${r}_${p}_out_bytes").'='.&getFilename($r,'protocol_'.$p.'.rrd').":out_bytes:AVERAGE",
@@ -610,7 +615,7 @@ sub subreport {
 	# CDEFs for each service
 	$str1 = 'CDEF:'.&cleanDEF("${r}_other_service_in_pct").'=100';
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_service_out_pct").'=100';
-	foreach my $s (keys %{$ref->{'service'}}) {
+	foreach my $s (sort keys %{$ref->{'service'}}) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
 				'DEF:'.&cleanDEF("${r}_${s}_src_out_bytes").'='.&getFilename($r,'service_'.$s.'_src.rrd').":out_bytes:AVERAGE",
@@ -645,7 +650,7 @@ sub subreport {
 	# CDEFs for each TOS
 	$str1 = 'CDEF:'.&cleanDEF("${r}_other_tos_in_pct").'=100';
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_tos_out_pct").'=100';
-	foreach my $t (keys  %{$ref->{'tos'}} ) {
+	foreach my $t (sort keys  %{$ref->{'tos'}} ) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
 				'DEF:'.&cleanDEF("${r}_${t}_out_bytes").'='.&getFilename($r,'tos_'.$t.'.rrd').":out_bytes:AVERAGE",
@@ -686,7 +691,7 @@ sub plotreport {
 		} else {
 			$neg='';
 		}
-		foreach my $p (keys %{$ref->{'protocol'}} ) {
+		foreach my $p (sort keys %{$ref->{'protocol'}} ) {
 			if (defined param('protocol_stacked') && param('protocol_stacked') eq 1) {
 				if( $countref->{protocol}{$direction} == 0 ) {
 					$string = 'AREA:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
@@ -695,7 +700,7 @@ sub plotreport {
 				}
 				$countref->{protocol}{$direction}++;
 			} else {
-				$string = 'LINE2:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
+				$string = 'LINE1:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
 			}
       			if ($direction eq 'in') {
 				push @{$argsref->{protocol}{in}}, $string.':'.cleanProtocolLabel($basename, $p);
@@ -714,7 +719,7 @@ sub plotreport {
 		} else {
 			$neg='';
 		}
-		foreach my $s (keys %{$ref->{'service'}} ) {
+		foreach my $s (sort keys %{$ref->{'service'}} ) {
 			foreach my $srcdst ('src','dst') {
 				if (defined param('service_stacked') && param('service_stacked') eq 1) {
 					if( $countref->{service}{$direction} == 0 ) {
@@ -724,7 +729,7 @@ sub plotreport {
 					}
 					$countref->{service}{$direction}++;
 				} else {
-					$string = 'LINE2:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
+					$string = 'LINE1:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
 				
 				}
       				if ($direction eq 'in') {
@@ -746,7 +751,7 @@ sub plotreport {
 		} else {
 			$neg='';
 		}
-		foreach my $t (keys %{$ref->{'tos'}} ) {
+		foreach my $t (sort keys %{$ref->{'tos'}} ) {
 			if (defined param('tos_stacked') && param('tos_stacked') eq 1) {
 				if( $countref->{tos}{$direction} == 0 ) {
 					$string = 'AREA:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$t,'src');
@@ -783,7 +788,7 @@ sub plotreport {
 				}
 				$countref->{total}{$direction}++;
 			} else {
-				$string = 'LINE2:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},'total','src');
+				$string = 'LINE1:'.&cleanDEF($basename.'_total_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},'total','src');
 			}
 	      		if ($direction eq 'in') {
 				push @{$argsref->{total}{in}}, $string.':TOTAL '.$basename;

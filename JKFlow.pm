@@ -535,20 +535,25 @@ sub _init {
 # needs to be as fast and as short as possible.
 sub wanted {
     my $self = shift;
-    my $which;
 
 	# Counting ALL
 	if (defined $JKFlow::mylist{'all'}) {
-		$which = 'out';
 		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
-			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
-				$which = 'in';
+			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
+			   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
+				countpackets(\%{$JKFlow::mylist{'all'}},'out');
+				countApplications(\%{$JKFlow::mylist{'all'}{'application'}},'out');
+				#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},'out');
 			} 
 		}
-		countpackets(\%{$JKFlow::mylist{'all'}},$which);
-		countApplications(\%{$JKFlow::mylist{'all'}{'application'}},$which);
-		#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},$which);
-
+		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
+			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
+			   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
+				countpackets(\%{$JKFlow::mylist{'all'}},'in');
+				countApplications(\%{$JKFlow::mylist{'all'}{'application'}},'in');
+				#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},'in');
+			} 
+		}
 	}
 	#print "Exporter:".$exporterip." Interface:".$output_if."\n";
 
@@ -576,14 +581,22 @@ sub wanted {
 			}
 		} 
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}) {
-			$which = 'out';
-			if ($JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
-				$which = 'in';
+			if ($JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
+			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
+				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
+					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets(\%{$ref},'in');
+					countApplications(\%{$ref->{'application'}},'in');
+					}
+				}
 			}
-			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
-				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-				countpackets(\%{$ref},$which);
-				countApplications(\%{$ref->{'application'}},$which);
+			if ($JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($srcaddr) &&
+			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
+				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
+					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
+					countpackets(\%{$ref},'out');
+					countApplications(\%{$ref->{'application'}},'out');
+					}
 				}
 			}
 		}
@@ -872,7 +885,7 @@ sub reporttorrd {
 		}
 	}
 	$self->updateRRD($file, @values);
-	print "File: $file @values\n";
+	#print "File: $file @values\n";
 }
 
 sub reporttorrdfiles {
@@ -991,7 +1004,7 @@ sub report {
 	}
 
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
-		print "Reporting Direction $direction \n";
+		#print "Reporting Direction $direction \n";
 		if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
 			mkdir($JKFlow::RRDDIR . $dir . "/" . $direction ,0755);
 		}
