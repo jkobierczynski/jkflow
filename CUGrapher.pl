@@ -44,7 +44,8 @@ unless( param() ) {
 # protocol/service -> filename
 my %filename;
 # lists of networks/protocols/services/routers
-my (%network, %protocol, %service, %tos, @router, @subnet);
+my (%network, %protocol, %service, %tos, %subdir);
+#my (%network, %protocol, %service, %tos, %subdir @router, @subnet);
 # should we show totals also?
 my %total;
 # hash for colors/CDEFs
@@ -52,8 +53,9 @@ my (%color, %cdef);
 # are we in debug mode?
 my $debug;
 
-&getRouter();
-&getSubnet();
+#&getRouter();
+#&getSubnet();
+&getSubdir();
 &getProtocols("","");
 &getServices("","");
 &getTOS("","");
@@ -425,6 +427,53 @@ sub getSubnet {
     }
 }
 
+
+### New getSubdir
+
+sub getSubdir {
+    foreach ( param('subnet') ) {
+        s/\.\./_/g;
+        if( $_ eq 'all') {
+           if ( -d $rrddir.'/total_subnet' ) {
+              %subnet{'total_subnet'}{'dir'} = '/total_subnet';
+           }
+           else {
+           &browserDie('Total Subnet Directory not found:'.$rrddir.'/total_subnet');
+           }
+        }
+        else {
+           if ( -d $rrddir.'/subnet_'.$_ ) {
+              %subnet{'subnet'}{$_}{'dir'} = '/'.$_;
+           }
+           else {
+           &browserDie('Subnet Directory not found:'.$rrddir.'/'.$_);
+           }
+        }
+    }
+    foreach ( param('router') ) {
+        s/\.\./_/g;
+        if( $_ eq 'all') {
+           if ( -d $rrddir.'/total_router' ) {
+              %subnet{'total_router'}{'dir'} = '/total_router';
+           }
+           else {
+           &browserDie('Total Router Directory not found:'.$rrddir.'/total_router')
+           }
+        }
+        else {
+           if ( -d $rrddir.'/router_'.$_ ) {
+              %subnet{'router'}{$_}{'dir'} = '/'.$_;
+           }
+           else {
+           &browserDie('Router Directory not found:'.$rrddir.'/'.$_);
+           }
+        }
+    }
+}
+ 
+
+
+
 sub getHours {
     if( param('hours') ) {
 	if( param('hours') =~ /^\d+$/ ) { $hours = param('hours') }
@@ -506,6 +555,58 @@ sub getProtocols {
 		$filename{$r}{'total'} = "${rrddir}/${type}${r}/total.rrd";
 		 }
 #    }
+}
+
+# Generate list of protocols and resolve filenames
+sub getFilenames {
+    foreach my $type ('router','subnet') {
+        foreach my $r (keys %subdir{$type}) {
+            foreach my $p (getProtocolList($type."_".$r)) { 
+                $subdir{$type}{$r}{'protocol'}{$p}="${rrddir}/${type}_${r}/protocol_${p}.rrd";
+                -f $subdir{$type}{$r}{'protocol'}{$p} or &browserDie("Cannot find router file $subdir{$type}{$r}{'protocol'}{$p}");
+            }
+        }
+        foreach my $r (keys %subdir{$type}) {
+            foreach my $s (getServiceList($type."_".$r)) { 
+                $subdir{$type}{$r}{'service'}{$s}="${rrddir}/${type}_${r}/service_${s}.rrd";
+                -f $subdir{$type}{$r}{'service'}{$s} or &browserDie("Cannot find router file $subdir{$type}{$r}{'service'}{$s}");
+            }
+        }
+        foreach my $r (keys %subdir{$type}) {
+            foreach my $t (getTosList($type."_".$r)) { 
+                $subdir{$type}{$r}{'tos'}{$t}="${rrddir}/${type}_${r}/tos_${t}.rrd";
+                -f $subdir{$type}{$r}{'tos'}{$t} or &browserDie("Cannot find router file $subdir{$type}{$r}{'tos'}{$t}");
+            }
+        }
+    }
+}
+
+
+        if( $r eq "all" && param("all_all_protocols") ) {
+	    push @{$protocol{$r}}, &getProtocolList("");
+	}
+      	elsif( param("${r}_all_protocols") ) {
+	    push @{$protocol{$r}}, &getProtocolList($type.$r);
+	}
+	elsif( param("${r}_protocol") ) {
+	    push @{$protocol{$r}}, param("${r}_protocol");
+	}
+	foreach my $p ( @{$protocol{$r}} ) {
+	    my $file;
+	    if( $r eq 'all' ) 
+		{
+		$file = "${rrddir}/protocol_${p}.rrd";
+		}
+	    else { $file =  "${rrddir}/${type}${r}/protocol_${p}.rrd"}
+	    -f $file or &browserDie("cannot find $file");
+
+	    $filename{$r}{$p} = $file;
+	}
+	if( $r eq 'all' ) { $filename{$r}{'total'} = "${rrddir}/total.rrd" }
+	else { 
+		$filename{$r}{'total'} = "${rrddir}/${type}${r}/total.rrd";
+		 }
+    }
 }
 
 # Generate list of services and resolve filenames
@@ -650,8 +751,7 @@ sub iterateColor {
 
 # Generate list of available protocols
 sub getProtocolList {
-    my $rrd2dir;
-    $rrd2dir = shift;
+    my $rrd2dir = shift;
     $rrd2dir="/$rrd2dir";
     opendir( DIR, $rrddir.$rrd2dir ) or &browserDie("open $rrddir/$rrd2dir failed ($!)");
     @_ = grep { /^protocol_.*\.rrd$/ } readdir( DIR );
