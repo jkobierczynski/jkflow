@@ -111,6 +111,7 @@ my($flowrate) = 1;
 my($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst);
 
 $JKFlow::directionroutersgroupsonly = 0;	# Are there directions with only routergroup attributes?
+$JKFlow::servicescounted = 0;			# Used for counting services not counted in other directions.
 $JKFlow::multicast = 0;				# Do multicast? Default no.
 
 # Multicast address spec's, taken from CampusIO
@@ -221,7 +222,7 @@ my $ref=shift;
 	}
 	pushProtocols(
 		$refxml->{protocols},
-		\%{$ref->{protocol}});
+		\%{$ref});
 	if (defined $refxml->{otherprotocols}) {
 		$ref->{protocol}{other}={};
 	}
@@ -345,7 +346,7 @@ my $tmp;
 				die "Unknown protocol $proto on line $.\n";
 			$proto = $tmp;
 		}
-		$ref->{$proto} = {};
+		$ref->{protocol}{$proto} = {};
 	}
 }
 
@@ -870,6 +871,13 @@ sub countDirections {
 			}
 		}
 	}
+		
+	if ( defined $JKFlow::mylist{direction}{other} && !$servicecounted ) {
+		#print "Counting!\n";
+		&{$JKFlow::mylist{direction}{other}{countfunction}}(\%{$JKFlow::mylist{direction}{other}},'out');
+
+	}
+	$servicecounted=0;
 }
 
 
@@ -951,10 +959,12 @@ EOF
 			$application->{'dst'}{$which}{'flows'}++;
 			$application->{'dst'}{$which}{'bytes'} += $bytes;
 			$application->{'dst'}{$which}{'pkts'} += $pkts;
+			$servicecounted=1;
 		} elsif (defined ($application=$ref->{'service'}{$protocol}{$srcport})) {
 			$application->{'src'}{$which}{'flows'}++;
 			$application->{'src'}{$which}{'bytes'} += $bytes;
 			$application->{'src'}{$which}{'pkts'} += $pkts;
+			$servicecounted=1;
 EOF
 	}
 	if (defined $ref->{'service'} && defined $ref->{'ftp'}) {
@@ -975,6 +985,7 @@ EOF
 			$ref->{'application'}{'other'}{'dst'}{$which}{'flows'}++;
 			$ref->{'application'}{'other'}{'dst'}{$which}{'bytes'} += $bytes;
 			$ref->{'application'}{'other'}{'dst'}{$which}{'pkts'} += $pkts;
+			$servicecounted=1;
 EOF
 	}
 	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{hosts}) {
@@ -1002,10 +1013,13 @@ EOF
 	
 EOF
 	}
+	if (defined $ref->{'service'}) {
 	$countpackets.= <<'EOF';
 		}
 	}
 EOF
+	}
+	
 	if (!defined $ref->{'service'} && defined $ref->{'ftp'}) {
 	
 	$countpackets.= <<'EOF';
@@ -1080,6 +1094,7 @@ sub countftp {
 				$ref->{'dst'}{$which}{'flows'}++;
 				$ref->{'dst'}{$which}{'bytes'} += $bytes;
 				$ref->{'dst'}{$which}{'pkts'} += $pkts;
+				$servicecounted=1;
 				#if (($srcport == 20) || ($dstport == 20)) {
 				#	print "Active FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
 				#} else {
@@ -1091,6 +1106,7 @@ sub countftp {
 				$ref->{'src'}{$which}{'flows'}++;
 				$ref->{'src'}{$which}{'bytes'} += $bytes;
 				$ref->{'src'}{$which}{'pkts'} += $pkts;
+				$servicecounted=1;
 				#if (($srcport == 20) || ($dstport == 20)) {
 				#	print "Active FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
 				#} else {
@@ -1103,6 +1119,7 @@ sub countftp {
 			$ref->{'dst'}{$which}{'flows'}++;
 			$ref->{'dst'}{$which}{'bytes'} += $bytes;
 			$ref->{'dst'}{$which}{'pkts'} += $pkts;
+			$servicecounted=1;
 			if (!defined $ref->{cache}{"$dstaddr:$srcaddr"}) {
 				$ref->{cache}{"$dstaddr:$srcaddr"}=$endtime;
 			}
@@ -1111,6 +1128,7 @@ sub countftp {
 			$ref->{'src'}{$which}{'flows'}++;
 			$ref->{'src'}{$which}{'bytes'} += $bytes;
 			$ref->{'src'}{$which}{'pkts'} += $pkts;
+			$servicecounted=1;
 			if (!defined $ref->{cache}{"$srcaddr:$dstaddr"}) {
 				$ref->{cache}{"$srcaddr:$dstaddr"}=$endtime;
 			}
@@ -1605,13 +1623,13 @@ sub writeAggScoreboard ()
 	    $table->setCaption("Top ".$scorekeep." by " .
 			       "<b>$key $dir</b><br>\n" .
 			       "built on aggregated topN " .
-			       "5 minute average samples to date",
+			       "average samples to date",
 			       'TOP');
 
 	    my $row = 1;
 	    $table->addRow('<b>rank</b>',
-			   "<b>Address</b>",
-			   "<b>Address</b>",
+			   "<b>address</b>",
+			   "<b>address</b>",
 			   '<b>bits/sec in</b>',
 			   '<b>bits/sec out</b>',
 			   '<b>pkts/sec in</b>',
