@@ -549,6 +549,14 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 					print "interface: ".$exporter->{interface};
 					$ref->{$direction}{router}{$exporter->{exporter}}{$exporter->{interface}}={};
 				}
+				if (defined $exporter->{localsubnets}) {
+					$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+					print "localsubnets: ";
+					foreach my $subnet (split(/,/,$exporter->{localsubnets})) {
+						print "+ subnet $subnet ";
+						$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($subnet);
+					}
+				}
 				print "\n";
 			}
 			$ref->{$direction}{countfunction}=\&countFunction2;
