@@ -11,7 +11,7 @@
 		<total/>
 	</all>
 	<routers>
-		<router ipaddress="10.101.249.3" name="rtbru01" write="yes">
+		<router ipaddress="10.101.249.3" name="rtbru01" write="no">
 			<direction>
 				<application name="web">80/tcp,443/tcp,8080/tcp</application>
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
@@ -49,6 +49,17 @@
 				<application name="mail">25/tcp,110/tcp,143/tcp</application>
 				<application name="windows">137-139/tcp,137-139/udp</application>
 				<multicast/>
+				<services>22/tcp,23/tcp,53/udp,53/tcp,102/tcp</services>
+				<direction>
+					<application name="w">80/tcp,443/tcp,8080/tcp</application>
+					<application name="m">25/tcp,110/tcp,143/tcp</application>
+					<application name="win">137-139/tcp,137-139/udp</application>
+					<multicast/>
+					<services>22/tcp,23/tcp</services>
+					<protocols>tcp,udp</protocols>
+					<tos/>
+					<total/>
+				</direction>
 			</direction>
 			<services>22/tcp,23/tcp,53/udp,53/tcp,102/tcp</services>
 			<protocols>tcp,udp,icmp</protocols>

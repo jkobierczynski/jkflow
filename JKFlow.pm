@@ -1,6 +1,20 @@
 #!/usr/local/bin/perl 
-# JKFlow.pm - A (hopefully) slightly faster implementation of some of the 
-# functionality of SubnetIO.pm, in a slightly more configurable fashion
+
+# ----------------- JKFlow.pm ----------------------
+
+# A flexible, scalable reporting module for FlowScan
+# It is very versatile in configuration, which is done
+# by in a XML, named JKFlow.xml
+  
+# JKFlow.pm has started as modification of CUFlow,
+# but has become a complete rewrite in which all good
+# elements of CUFlow were kept, but many new things are
+# added.
+
+ 
+# It is intended to be a replacement for SubnetIO.pm
+# and functionality of SubnetIO.pm, in more configurable
+# fashion. 
 # Owes *VERY* heavily to Dave Plonka's SubnetIO.pm and CampusIO.pm
 # Thanks, Dave :) <plonka@doit.wisc.edu>
 
@@ -23,8 +37,7 @@ require Exporter;
 
 =head1 NAME
 
-JKFlow - flowscan module that is a little more configurable than
-SubnetIO.pm in return for sacrificing some modularity.
+JKFlow - XML configurable flowscan reporting module.
 
 =head1 SYNOPSIS
 
@@ -36,203 +49,24 @@ or in F<flowscan.cf>:
 
 =head1 DESCRIPTION
 
-JKFlow.pm creates rrds matching the configuration given in JKFlow.cf. It 
-(by default) creates a 'total.rrd' file, representing the total in and 
-out-bound traffic it receives. It also creates 2 rrd files for every 
-B<Service> directive in JKFlow.cf, service_servicename_src.rrd and 
-service_servicename_dst.rrd.
+JKFlow.pm creates rrds matching the configuration given in JKFlow.xml. 
+It allows you to create classes in which you can select any number of
+router exporters, any number of subnets, any network of grouping of
+router exporters/subnets, all router exporters, all subnets or simply
+anything in which you can monitor for any protocol/service or application
+,which is a grouping of services, type-of-services, broadcasts, or the
+total network traffic. You can define 'directions' which selects  
+source subnets and a destination subnets, wherein you can define several
+other monitoring capabilities and other directions.
 
 =head1 CONFIGURATION
 
-JKFlow's configuration file is F<JKFlow.cf>. This configuration file is
+JKFlow's configuration file is F<JKFlow.xml>. This configuration file is
 located in the directory in which the F<flowscan> script resides.
-
-In this file, blank lines, and any data after a pound sign (#) are ignored.
-Directives that can be put in this file include:
 
 =over 4
 
-=item B<Router>
-
-By default, JKFlow does not care from which router the flow records it is
-processing are from. Unless you specify a Router statement, it just
-aggregates all the traffic it gets and produces rrd files based on the
-total. But, if you put
-
-	# Separate out traffic from foorouter
-	# Router <Ip Address> <optional alias>
-	Router 127.0.0.5 foorouter
-
-In addition to generating the totals rrd files it normally does in
-OutputDir, it will create a directory whose name is the IP address specified
-(or the alias, if one is provided), and create all the same service_*,
-protocol_*, and total.rrd files in it, except only for traffic passed from
-the router whose address is <Ip Address>.
-
-Note that it does not make any sense to have Router statements in your
-config unless you have more than one router feeding flow records to flowscan
-(with one router, the results in the per-router directory will be identical
-to the total records in OutputDir)
-
-=item B<Subnet>
-
-Each B<Subnet> entry in the file is an IP/length pair that represents a local
-subnet. E.g.:
-
-	# Subnet for main campus
-	Subnet 128.59.0.0/16
-
-Add as many of these as is necessary. JKFlow does not generate additional
-reports per subnet, as does CampusIO, it simply treats any packet destined
-to an address *not* in any of its Subnet statements as an outbound packet.
-The Subnet statements are solely to determine if a given IP address is "in" 
-your network or not. For subnet-specific reporting, see the Network item
-below.
-
-=item B<Network>
-
-Each B<Network> statement in the cf file is used to generate an rrd file
-describing the bytes, packets, and flows in and out of a group of IP 
-addresses. E.g.:
-
-	# Watson Hall traffic
-	Network 128.59.39.0/24,128.59.31.0/24 watson
-
-It consists of a comma separated list of 1 or more CIDR blocks, followed by
-a label to apply to traffic into/out of those blocks. It creates rrd files
-named 'network_label.rrd'. Note that these are total traffic seen only,
-unfortunately, and not per-exporter as Service and Protocol are.
-
-=item B<Service>
-
-Each B<Service> entry in the file is a port/protocol name that we are
-interested in, followed by a label. E.g.:
-
-	# Usenet news
-	Service nntp/tcp news
-
-In this case, we are interested in traffic to or from port 119 on TCP, and
-wish to refer to such traffic as 'news'. The rrd files that will be created
-to track this traffic will be named 'service_news_src.rrd' (tracking traffic
-whose source port is 119) and 'service_news_dst.rrd' (for traffic with dst
-port 119).  Each B<Service> entry will produce these 2 service files. 
-
-The port and protocol can either be symbolic (nntp, tcp), or absolute
-numeric (119, 6). If a name is symbolic, we either getservbyname or
-getprotobyname as appropriate.
-
-B<Service> tags may also define a range or group of services that should 
-be aggregated together. E.g:
-
-	# RealServer traffic
-	Service 7070/tcp,554/tcp,6970-7170/udp realmedia
-
-This means that we will produce a 'service_realmedia_dst.rrd' and 
-'service_realmedia_src.rrd' files, which will contain traffic data for
-the sum of the port/protocol pairs given above.
-
-=item B<Multicast>
-
-Add B<Multicast> to your JKFlow.cf file to enable our cheap multicast hack.
-E.g. :
-	# Log multicast traffic
-	Multicast
-
-Unfortunately, in cflow records, multicast traffic always has a nexthop
-address of 0.0.0.0 and an output interface of 0, meaning by default JKFlow
-drops it (but counts for purposes of total.rrd). If you enable this option,
-JKFlow will create protocol_multicast.rrd in OutputDir (and
-exporter-specific rrd's for any Router statements you have)
-
-=item B<Protocol>
-
-Each B<Protocol> entry means you are interested in gathering summary
-statistics for the protocol named in the entry. E.g.:
-
-	# TCP
-	Protocol 6 tcp
-
-Each protocol entry creates an rrd file named protocol_<protocol>.rrd in
-B<OutputDir> The protocol may be specified either numerically (6), or
-symbolically (tcp). It may be followed by an optional alias name. If
-symbolic, it will be resolved via getprotobyname. The rrd file will be named
-according to the alias, or if one is not present, the name/number supplied.
-
-=item B<TOS>
-
-Each B<TOS> entry means you are interested in gathering summary statistics
-for traffic whose TOS flag is contained in the range of the entry. E.g.:
-
-	# Normal
-	TOS 0 normal
-
-Each TOS entry creates an rrd file named tos_<tos>.rrd in B<OutputDir>. The
-TOS value must be specified numerically. The rrd file will be named
-according to the alias.
-
-Similar to Service tags, you may define ranges or groups of TOS values to
-record together. E.g.:
-
-	# first 8 values
-	TOS 0-7 normal  
-
-This will graph data about all flows with the matching TOS data. TOS values
-are between 0 and 255 inclusive.
-
-=item B<OutputDir>
-
-This is the directory where the output rrd files will be written.
-E.g.:
-
-	# Output to rrds
-	OutputDir rrds
-
-=item B<Scoreboard>
-
-The Scoreboard directive is used to keep a running total of the top
-consumers of resources. It produces an html reports showing the top N (where
-N is specified in the directive) source addresses that sent the most (bytes,
-packets, flows) out, and the top N destination addresses that received the
-most (bytes, packets, flows) from the outside. Its syntax is
-
-	# Scoreboard <NumberResults> <RootDir> <CurrentLink>
-	Scoreboard 10 /html/reports /html/current.html
-
-The above indicates that each table should show the top 10 of its category,
-to keep past reports in the /html/reports directory, and the latest report
-should be pointed to by current.html.
-
-Within RootDir, we create a directory per day, and within that, a directory
-per hour of the day. In each of these directories, we write the scoreboard
-reports. 
-
-Scoreboarding measures all traffic we get flows for, it is unaffected by any
-Router statements in your config.
-
-=item B<AggregateScore>
-
-The AggregateScore directive indicates that JKFlow should keep running totals
-for the various Scoreboard categories, and generate an overall report based 
-on them, updating it every time it creates a new Scoreboard file. E.g.:
-
-	# AggregateScore <NumberToPrint> <Data File> <OutFile>
-	AggregateScore 10 /html/reports/totals.dat /html/topten.html
-
-If you configure this option, you must also turn on
-Scoreboard. /html/reports/totals.dat is a data file containing an easily
-machine-readable form of the last several ScoreBoard reports. It then takes
-each entries average values for every time it has appeared in a
-ScoreBoard. Then it prints the top NumberToPrint of those. Every 100
-samples, it drops all entries that have only appeared once, and divides all
-the others by 2 (including the number of times they have appeared). So, if a
-given host were always in the regular ScoreBoard, its appearance count
-would slowly grow from 50 to 100, then get cut in half, and repeat.
-
-This is usefull for trend analysis, as it enables you to see which hosts are
-*always* using bandwidth, as opposed to outliers and occasional users.
-
-AggregateScoreboarding measures all traffic we get flows for, it is
-unaffected by any Router statements in your config.
+=item A
 
 =back
 
@@ -310,6 +144,11 @@ sub parseConfig {
 		if (defined $config->{all}{total}) {
 			$JKFlow::mylist{'all'}{'total'}={};
 		}
+		if (defined $config->{all}{write}) {
+			$JKFlow::mylist{'all'}{'write'}=$config->{all}{write};
+ 		} else {
+			$JKFlow::mylist{'all'}{'write'}="yes";
+		}
 
 	}
 
@@ -337,7 +176,11 @@ sub parseConfig {
 		if (defined $config->{routers}{router}{$router}{total}) {
 			$JKFlow::mylist{'router'}{$routerip}{'total'}={};
 		}
-
+		if (defined $config->{routers}{router}{$router}{write}) {
+			$JKFlow::mylist{'router'}{$routerip}{'write'}=$config->{routers}{router}{$router}{write};
+ 		} else {
+			$JKFlow::mylist{'router'}{$routerip}{'write'}='yes';
+		}
 	}
 
 	foreach my $subnet (keys %{$config->{subnets}{subnet}}) {
@@ -362,7 +205,11 @@ sub parseConfig {
 		if (defined $config->{subnets}{subnet}{$subnet}{total}) {
 			$JKFlow::mylist{'subnet'}{$subnet}{'total'}={};
 		}
-
+		if (defined $config->{subnets}{subnet}{$subnet}{write}) {
+			$JKFlow::mylist{'subnet'}{$subnet}{'write'}=$config->{subnets}{subnet}{$subnet}{write};
+ 		} else {
+			$JKFlow::mylist{'subnet'}{$subnet}{'write'}="yes";
+		}
 	}
 
 	foreach my $network (keys %{$config->{networks}{network}}) {
@@ -390,8 +237,6 @@ sub parseConfig {
 	if (defined $config->{subnet}{total_subnet}) {
 		$JKFlow::mylist{'total_subnet'} = {};
 	}		
-	use Data::Dumper;
-	print Dumper(%JKFlow::mylist)."\n";
 }
 
 sub pushProtocols {
@@ -500,11 +345,18 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			$ref->{$refxml->{'name'}}{'service'});
 	}
 	if (defined $refxml->{'protocols'}) {
-		$ref->{$refxml->{'name'}}{protocol}={};
+		$ref->{$refxml->{'name'}}{'protocol'}={};
 		pushProtocols(
 			$refxml->{'protocols'},
 			$ref->{$refxml->{'name'}}{'protocol'});
 	}
+	if (defined $refxml->{'direction'}) {
+		$ref->{$refxml->{'name'}}{'direction'}={};
+		pushDirections(
+			\%{$refxml->{'direction'}},
+			\%{$ref->{$refxml->{'name'}}{'direction'}});
+	}
+
 	if (defined $refxml->{'multicast'}) {
 		$ref->{$refxml->{'name'}}{'multicast'}={};
 	}
@@ -670,10 +522,11 @@ my $which=shift;
 					}
 				}
 		}
-		countpackets(\%{$ref->{$direction}},$which);
 	    	if (($dstaddr & $JKFlow::MCAST_MASK) == $JKFlow::MCAST_NET) {
         		countmulticasts(\%{$ref->{$direction}});
 		}
+		# Recursive logging, maybe mad or maybe powerfull, I don't know yet :-) 
+		countDirections(\%{$ref->{$direction}{'direction'}},$which);
 	}
 }
 
@@ -886,53 +739,21 @@ sub reporttorrdfiles {
 		}
 	}
 
+	if (defined $ref->{'application'}) {	
+		foreach my $src ('src','dst') { 
+			foreach my $application (keys %{$ref->{'application'}}) {
+  	     			$file = $JKFlow::OUTDIR. $dir . "/service_" . $application . "_" . $src . ".rrd";
+				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}});
+			}
+		}
+	}
+
 	if (defined $ref->{'direction'}) {
 		foreach my $direction (keys %{$ref->{'direction'}}) {
-			foreach my $src ('src','dst') { 
-				foreach my $application (keys %{$ref->{'direction'}{$direction}{'application'}}) {
-	        			$file = $JKFlow::OUTDIR. $dir . "/service_" . $direction . "_" . $application . "_" . $src . ".rrd";
-					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'application'}{$application}{$src}});
-				}
+			if (! -d $JKFlow::OUTDIR . $dir."/".$direction ) {
+				mkdir($JKFlow::OUTDIR . $dir . "/" . $direction ,0755);
 			}
-    			#reporttorrdfiles($self, $dir,\%{$reference->{'direction'}{$direction}});
-			if (defined $ref->{'direction'}{$direction}{'total'}) {	
-				$file = $JKFlow::OUTDIR . $dir . "/tos_total_" . $direction . ".rrd";
-				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'total'}});
-			}
-
-			if (defined $ref->{'direction'}{$direction}{'tos'}) {	
-				foreach my $tos ('normal','other') {
-					$file = $JKFlow::OUTDIR . $dir . "/tos_" . $direction . "_" . $tos . ".rrd";
-					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'tos'}{$tos}});
- 				}
-			}
-
-			if (defined $ref->{'direction'}{$direction}{'multicast'}) {	
-				$file = $JKFlow::OUTDIR . $dir . "/protocol_" . $direction . "_multicast.rrd";
-				reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'multicast'}{'total'}});
-			}
-
-			if (defined $ref->{'direction'}{$direction}{'protocol'}) {	
-				foreach my $protocol (keys %{$ref->{'direction'}{$direction}{'protocol'}}) {
-					if (!($tmp = getprotobynumber($protocol))) {
-						$tmp = $protocol;
-					}
-					$file = $JKFlow::OUTDIR. $dir . "/protocol_" . $direction . "_" . $tmp . ".rrd";
-					reporttorrd($self,$file,\%{$ref->{'direction'}{$direction}{'protocol'}{$protocol}{'total'}});
-				}
-			}
-
-			if (defined $ref->{'direction'}{$direction}{'service'}) {	
-				foreach my $src ('src','dst') {
-					foreach my $protocol (keys %{$ref->{'direction'}{$direction}{'service'}}) {
-						foreach my $srv (keys %{$ref->{'direction'}{$direction}{'service'}{$protocol}}) {
-							if (!($tmp = getservbyport ($srv, getprotobynumber($protocol)))) {
-								$tmp = $srv;
-							}
-						}
-   	 				}
-				}
-			}
+			reporttorrdfiles($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}});
 		}
 	}
 }
@@ -967,9 +788,9 @@ sub report {
 		}
 	}  
 	
-	#use Data::Dumper;
-	#print "Data:".Dumper(%JKFlow::mylist)."\n";
-	reporttorrdfiles($self,"",\%JKFlow::mylist);
+	if (${$JKFlow::mylist{'all'}}{'write'} eq 'yes') {
+		reporttorrdfiles($self,"",\%{$JKFlow::mylist{'all'}});
+	}
 
 	if (! -d $JKFlow::OUTDIR."/total_router" ) {
 		mkdir($JKFlow::OUTDIR."/total_router",0755);
@@ -982,20 +803,24 @@ sub report {
 	reporttorrdfiles($self,"/total_subnet",\%{$JKFlow::mylist{'total_subnet'}});
 
 	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-		($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
-		print "Router:$router , Routerdir:$routerdir \n";
-		if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
-			mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
+		if (${$JKFlow::mylist{'router'}{$router}}{'write'} eq 'yes') {
+			($routerdir=$JKFlow::mylist{'router'}{$router}{'name'}) =~ s/\//_/g;
+			print "Router:$router , Routerdir:$routerdir \n";
+			if (! -d $JKFlow::OUTDIR . "/router_$routerdir" ) {
+				mkdir($JKFlow::OUTDIR . "/router_$routerdir",0755);
+			}
+			reporttorrdfiles($self,"/router_".$routerdir,\%{$JKFlow::mylist{'router'}{$router}});
 		}
-		reporttorrdfiles($self,"/router_".$routerdir,\%{$JKFlow::mylist{'router'}{$router}});
 	}
 
 	foreach my $subnet (keys %{$JKFlow::mylist{'subnet'}}) {
-		($subnetdir=$subnet) =~ s/\//_/g;
-		if (! -d $JKFlow::OUTDIR ."/subnet_$subnetdir" ) {
-			mkdir($JKFlow::OUTDIR ."/subnet_$subnetdir",0755);
+		if (${$JKFlow::mylist{'subnet'}{$subnet}}{'write'} eq 'yes') {
+			($subnetdir=$subnet) =~ s/\//_/g;
+			if (! -d $JKFlow::OUTDIR ."/subnet_$subnetdir" ) {
+				mkdir($JKFlow::OUTDIR ."/subnet_$subnetdir",0755);
+			}
+			reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}});
 		}
-		reporttorrdfiles($self,"/subnet_".$subnetdir,\%{$JKFlow::mylist{'subnet'}{$subnet}});
 	}
     
 	foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
