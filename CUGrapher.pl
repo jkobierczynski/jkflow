@@ -442,16 +442,22 @@ sub getFilenames {
 		-f $subdir{$r}{'total'} or &browserDie("Cannot find file $subdir{$r}{'total'}");
 	}
     }
-    foreach my $p (getProtocolList('')) { 
-        if ( param("all_protocol_${p}")) {
-        $subdir{'all'}{'protocol'}{$p}="${rrddir}/protocol_${p}.rrd";
-        -f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
-        }
-    }
 #    foreach my $p (param("all_all_protocols")) {
 #	$subdir{'all'}{'protocol'}="${rrddir}/protocol_${p}.rrd";
 #	-f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
 #    }
+    foreach my $p (getProtocolList('')) { 
+        if ( param("all_protocol")) {
+        $subdir{'all'}{'protocol'}{$p}="${rrddir}/protocol_${p}.rrd";
+        -f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
+        }
+    }
+    if (param("all_all_protocols")) {
+        foreach my $p (getProtocolList('')) { 
+		$subdir{'all'}{'protocol'}{$p}="${rrddir}/protocol_${p}.rrd";
+		-f $subdir{'all'}{'protocol'}{$p} or &browserDie("Cannot find file $subdir{'all'}{'protocol'}{$p}");
+	}
+    }
     foreach my $s (getServiceList('')) { 
         if ( param("all_service_${s}")) {
         $subdir{'all'}{'service'}{$s}="${rrddir}/service_${s}";
@@ -488,7 +494,8 @@ sub getFilenames {
         $subdir{'all'}{'network'}{$n}="${rrddir}/network_${n}.rrd";
         -f $subdir{'all'}{'network'}{$n} or &browserDie("Cannot find file $subdir{'all'}{'network'}{$n}");
     }
-    if ( param("all_total") || param('all_network')|| param('all_tos')|| param('all_protocol') || param('all_service') || param('all_all_services') ) {
+    if ( 	param("all_total") || param('all_network') || param('all_tos') || param('all_all_tos') || 
+		param('all_protocol') || param('all_all_protocols') || param('all_service') || param('all_all_services') ) {
     	$subdir{'all'}{'total'}="${rrddir}/total.rrd";
     	-f $subdir{'all'}{'total'} or &browserDie("Cannot find file $subdir{'all'}{'total'}");
     }
@@ -673,6 +680,9 @@ sub setColors {
 		$color{$type}{'total'} = &iterateColor(\@safe_colors);
 	    }
 	if (defined $subdir{'all'}) {
+		foreach my $p (keys %{$subdir{'all'}{'protocol'}}) {
+    			$color{'protocol'}{$p} = &iterateColor(\@safe_colors);
+		}
 		foreach my $s (keys %{$subdir{'all'}{'service'}}) {
     			$color{'service'}{$s}{'src'} = &iterateColor(\@double_colors);
     			$color{'service'}{$s}{'dst'} = &iterateColor(\@double_colors);
@@ -994,7 +1004,33 @@ sub io_report {
 			 'CDEF:'.&cleanDEF("all_total_in_${reportType}_neg").'='.&cleanDEF("all_total_in_${reportType}").',-1,*');
         }
     }
-  
+ 
+    # CDEFs for each all TOS
+    $str1 = 'CDEF:'.&cleanDEF("all_other_protocol_in_pct").'=100';
+    $str2 = 'CDEF:'.&cleanDEF("all_other_protocol_out_pct").'=100';
+    foreach my $p (keys %{$subdir{'all'}{'protocol'}} ) {
+	    if( $reportType eq 'bits' ) {
+		push @args, ('DEF:'.&cleanDEF("all_${p}_out_bytes").'='.$subdir{'all'}{'protocol'}{$p}.':out_bytes:AVERAGE',
+			     'DEF:'.&cleanDEF("all_${p}_in_bytes").'='.$subdir{'all'}{'protocol'}{$p}.':in_bytes:AVERAGE',
+			     'CDEF:'.&cleanDEF("all_${p}_out_bits").'='.&cleanDEF("all_${p}_out_bytes").',8,*',
+			     'CDEF:'.&cleanDEF("all_${p}_in_bits").'='.&cleanDEF("all_${p}_in_bytes").',8,*',
+			     'CDEF:'.&cleanDEF("all_${p}_in_bits_neg").'='.&cleanDEF("all_${p}_in_bytes").',8,*,-1,*');
+	    } else {
+		push @args, ('DEF:'.&cleanDEF("all_${p}_out_${reportType}").'='.$subdir{'all'}{'protocol'}{$p}.":out_${reportType}:AVERAGE",
+			     'DEF:'.&cleanDEF("all_${p}_in_${reportType}").'='.$subdir{'all'}{'protocol'}{$p}.":in_${reportType}:AVERAGE",
+			     'CDEF:'.&cleanDEF("all_${p}_in_${reportType}_neg").'='.&cleanDEF("all_${p}_in_${reportType}").',-1,*');
+	    }
+	    push @args, 'CDEF:'.&cleanDEF("all_${p}_in_pct").'='.&cleanDEF("all_${p}_in_${reportType}").','.&cleanDEF("all_total_in_${reportType}").',/,100,*';
+	    push @args, 'CDEF:'.&cleanDEF("all_${p}_out_pct").'='.&cleanDEF("all_${p}_out_${reportType}").','.&cleanDEF("all_total_out_${reportType}").',/,100,*';
+	    $str1 .= ','.&cleanDEF("all_${p}_in_pct").',-';
+	    $str2 .= ','.&cleanDEF("all_${p}_out_pct").',-';
+    }
+    if( scalar %{$subdir{'all'}{'protocol'}} ) {
+	push @args, $str1;
+	push @args, $str2;
+    }
+
+ 
     # CDEFs for each all Service
     $str1 = 'CDEF:'.&cleanDEF("all_other_service_in_pct").'=100';
     $str2 = 'CDEF:'.&cleanDEF("all_other_service_out_pct").'=100';
@@ -1196,6 +1232,19 @@ sub io_report {
 			push @args, 'LINE1:'.&cleanDEF("${r}_total_".$direction."_".$reportType.$neg).$color{'total'}{$r}.':TOTAL';
 		}
         }
+      }
+      $count = 0;
+      foreach my $p (keys %{$subdir{'all'}{'protocol'}} ) {
+		$count++;
+		if( $count == 1 ) {
+			push @args, 'AREA:'.&cleanDEF("all_${p}_".$direction."_".$reportType.$neg).$color{'protocol'}{$p}.':'.&cleanProtocolLabel($p);
+		} else {
+			push @args, 'STACK:'.&cleanDEF("all_${p}_".$direction."_".$reportType.$neg).$color{'protocol'}{$p}.':'.&cleanProtocolLabel($p);
+		}
+		if ($direction eq 'in') {            
+			push @args, 'GPRINT:'.&cleanDEF("all_${p}_out_pct").':AVERAGE:%.1lf%% Out';
+			push @args, 'GPRINT:'.&cleanDEF("all_${p}_in_pct").':AVERAGE:%.1lf%% In\n';
+		}
       }
       $count = 0;
       foreach my $s (keys %{$subdir{'all'}{'service'}} ) {
