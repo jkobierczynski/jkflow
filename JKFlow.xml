@@ -1,287 +1,73 @@
 <config>
 	<all write="yes">
-		<application name="web">80/tcp,8080/tcp</application>
-		<application name="secureweb">443/tcp</application>
-		<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-		<application name="dns">53/udp,53/tcp</application>
-		<application name="snmp">161-162/udp</application>
-		<services>20-23/tcp,25/tcp,102/tcp,110/tcp,119/tcp,143/tcp</services>
+		<direction>
+			<application name="web">80/tcp,443/tcp,8080/tcp</application>
+			<application name="mail">25/tcp,110/tcp,143/tcp</application>
+		</direction>
+		<services>80/tcp,81/tcp,110/tcp,53/udp</services>
 		<protocols>tcp,udp,icmp</protocols>
-		<multicast/>
 		<tos/>
 		<total/>
 	</all>
 	<routers>
-		<router routers="10.101.249.3" name="rtbru01" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
+		<router ipaddress="10.101.249.3" name="rtbru01" write="yes">
+			<direction>
+				<application name="web">80/tcp,443/tcp,8080/tcp</application>
+				<application name="mail">25/tcp,110/tcp,143/tcp</application>
+			</direction>
+			<services>53/udp</services>
 			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
 		</router>
-		<router routers="10.101.249.2" name="rtbru02" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
+		<router ipaddress="10.101.249.2" name="rtbru02" write="no">
+			<direction>
+				<application name="web">80/tcp,443/tcp,8080/tcp</application>
+				<application name="mail">25/tcp,110/tcp,143/tcp</application>
+			</direction>
+			<services>53/udp</services>
+			<protocols>tcp,icmp</protocols>
 			<tos/>
 			<total/>
 		</router>
 		<total_router/>
 	</routers>
 	<subnets>
-		<subnet subnets="10.240.0.0/17" name="Belgium" write="yes">
-			<direction name="test" fromsubnets="0.0.0.0/0" tosubnets="0.0.0.0/0">
-
-				<application name="web">80/tcp,8080/tcp</application>
-				<application name="secureweb">443/tcp</application>
-				<application name="mailreading">110/tcp,143/tcp</application>
-				<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-				<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-				<protocols>tcp,udp,icmp</protocols>
-				<multicast/>
-				<tos/>
-				<total/>
+		<subnet name="10.240.72.0/22" write="yes">
+			<direction>
+				<application name="web">80/tcp,443/tcp,8080/tcp</application>
+				<application name="mail">25/tcp,110/tcp,143/tcp</application>
+				<application name="windows">137-139/tcp,137-139/udp</application>
 			</direction>
-			<direction name="Belgium-Netherlands" fromsubnets="10.240.0.0/17" tosubnets="10.245.128.0/17">
-
-				<application name="web">80/tcp,8080/tcp</application>
-				<application name="secureweb">443/tcp</application>
-				<application name="mailreading">110/tcp,143/tcp</application>
-				<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-				<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-				<protocols>tcp,udp,icmp</protocols>
-				<multicast/>
-				<tos/>
-				<total/>
+			<services>22/tcp,23/tcp,53/udp,53/tcp,102/tcp</services>
+			<protocols>tcp,udp,icmp</protocols>
+			<tos/>
+			<total/>
+		</subnet>
+		<subnet name="10.101.249.0/24" write="yes">
+			<direction>
+				<application name="web">80/tcp,443/tcp,8080/tcp</application>
+				<application name="mail">25/tcp,110/tcp,143/tcp</application>
+				<application name="windows">137-139/tcp,137-139/udp</application>
 			</direction>
-			<direction name="Belgium-France" fromsubnets="10.240.0.0/17" tosubnets="10.242.0.0/17">
-
-				<application name="web">80/tcp,8080/tcp</application>
-				<application name="secureweb">443/tcp</application>
-				<application name="mailreading">110/tcp,143/tcp</application>
-				<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-				<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-				<protocols>tcp,udp,icmp</protocols>
-				<multicast/>
-				<tos/>
-				<total/>
-			</direction>
-			<direction name="Belgium-Germany" fromsubnets="10.240.0.0/17" tosubnets="10.241.0.0/17">
-
-				<application name="web">80/tcp,8080/tcp</application>
-				<application name="secureweb">443/tcp</application>
-				<application name="mailreading">110/tcp,143/tcp</application>
-				<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-				<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-				<protocols>tcp,udp,icmp</protocols>
-				<multicast/>
-				<tos/>
-				<total/>
-			</direction>
-			<direction name="Belgium-UnitedKingdom" fromsubnets="10.240.0.0/17" tosubnets="10.240.128.0/17">
-
-				<application name="web">80/tcp,8080/tcp</application>
-				<application name="secureweb">443/tcp</application>
-				<application name="mailreading">110/tcp,143/tcp</application>
-				<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-				<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-				<protocols>tcp,udp,icmp</protocols>
-				<multicast/>
-				<tos/>
-				<total/>
-			</direction>
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
+			<services>22/tcp,23/tcp,53/udp,53/tcp,102/tcp</services>
 			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.240.128.0/17" name="UnitedKingdom" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.241.0.0/17" name="Germany" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.241.128.0/18" name="Austria" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.241.192.0/18" name="Switzerland" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.242.0.0/17" name="France" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.242.128.0/17" name="Italy" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.243.0.0/19" name="Bulgaria" write="yes">
-			<application name="web">80/tcp,443/tcp,8080/tcp</application>
-			<application name="mail">25/tcp,102/tcp,110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<services>20-21/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<total/>
-		</subnet>
-		<subnet subnets="10.243.32.0/20" name="Turkey" write="yes">
-			<application name="web">80/tcp,443/tcp,8080/tcp</application>
-			<application name="mail">25/tcp,102/tcp,110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<services>20-21/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<total/>
-		</subnet>
-		<subnet subnets="10.243.48.0/20" name="Greece" write="yes">
-			<application name="web">80/tcp,443/tcp,8080/tcp</application>
-			<application name="mail">25/tcp,102/tcp,110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<services>20-21/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<total/>
-		</subnet>
-		<subnet subnets="10.245.32.0/19" name="Norway" write="yes">
-			<application name="web">80/tcp,443/tcp,8080/tcp</application>
-			<application name="mail">25/tcp,102/tcp,110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<services>20-23/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.245.64.0/19" name="Sweden" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.245.96.0/19" name="EMEA" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.245.128.0/17" name="Netherlands" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
-			<tos/>
-			<total/>
-		</subnet>
-		<subnet subnets="10.247.0.0/17" name="Spain" write="yes">
-			<application name="web">80/tcp,8080/tcp</application>
-			<application name="secureweb">443/tcp</application>
-			<application name="mailreading">110/tcp,143/tcp</application>
-			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
-			<application name="dns">53/udp,53/tcp</application>
-			<application name="snmp">161-162/udp</application>
-			<services>20-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<protocols>tcp,udp,icmp</protocols>
-			<multicast/>
 			<tos/>
 			<total/>
 		</subnet>
 		<total_subnet/>
 	</subnets>
+	<networks>
+		<network name="belgium">
+			<routers>10.101.249.2,10.101.249.3</routers>
+			<subnets>10.240.72.0/22,10.101.249.0/24</subnets>
+		</network>
+		<network name="Holland">
+			<direction name="Windows belgium-holland" fromsubnet="10.101.72.0/22" tosubnet="10.240.0.0/16">
+				<application name="web">80/tcp,443/tcp,8080/tcp</application>
+				<application name="mail">25/tcp,110/tcp,143/tcp</application>
+				<services>99/tcp,100/tcp</services>
+				<protocols>egp</protocols>
+			</direction>
+		</network>
+	</networks>
 	<outputdir>/var/flows/reports/rrds</outputdir>
 </config>
