@@ -7,98 +7,118 @@
 			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
 			<application name="dns">53/udp,53/tcp</application>
 			<services>22-23/tcp,25/tcp,102/tcp,119/tcp</services>
-			<set name="Extra Services"/>
+			<ftp/>
+			<total/>
 		</defineset>
 		<defineset name="Extra Services">
 			<protocols>tcp,udp,icmp</protocols>
-			<ftp/>
 			<multicast/>
 			<tos/>
-			<total/>
 		</defineset>
 	</definesets>
 	<sites>
-		<site name="Belgium" subnets="10.140.0.0/16"/>
-		<site name="Holland" subnets="10.150.0.0/16"/>
-		<site name="England" subnets="10.160.0.0/16"/>
-		<site name="Germany" subnets="10.170.0.0/16"/>
-		<site name="France" subnets="10.180.0.0/16"/>
-		<site name="Internet" subnets="0.0.0.0/0" nosubnets="10.140.0.0/16,10.150.0.0/16,10.160.0.0/16,10.170.0.0/16,10.180.0.0/16"/>
+		<site name="Belgium" subnets="10.10.0.0/16"/>
+		<site name="Holland" subnets="10.20.0.0/16"/>
+		<site name="England" subnets="10.30.0.0/16"/>
+		<site name="Germany" subnets="10.40.0.0/16"/>
+		<site name="France" subnets="10.50.0.0/16"/>
+		<site name="Internet" subnets="0.0.0.0/0"/>
 	</sites>
 	<routergroups>
 		<routergroup name="routers1">
-			<router exporter="10.222.149.2" interface="1"/>
-			<router exporter="10.222.149.2" interface="2"/>
+			<router exporter="10.1.2.2" interface="3"/>
+			<router exporter="10.1.2.3" interface="4"/>
 		</routergroup>
 		<routergroup name="routers2">
-			<router exporter="10.222.149.3" localsubnets="10.0.0.0/8"/>
+			<router exporter="10.1.2.3" localsubnets="10.0.0.0/8"/>
 		</routergroup>
 		<routergroup name="routers3">
-			<router exporter="10.222.213.1" localsubnets="10.0.0.0/8"/>
-			<router exporter="10.222.214.1" localsubnets="10.0.0.0/8"/>
+			<router exporter="10.1.2.3" interface="1"/>
+		</routergroup>
+		<routergroup name="routers4">
+			<router exporter="10.1.2.3" interface="2"/>
 		</routergroup>
 	</routergroups>
 	<all localsubnets="10.0.0.0/8" samplerate="1">
 		<set name="Common Services"/>
+		<set name="Extra Services"/>
 	</all>
 	<directions>
-		<direction name="Belgium-Internet" from="Belgium" to="Internet">
+		<direction name="Belgium-Internet" from="Belgium" to="Internet" noto="Belgium">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
 			<scoreboard hosts="1" ports="1"/>
 		</direction>
-		<direction name="Holland-Internet" from="Holland" to="Internet">
+		<direction name="Holland-Internet" from="Holland" to="Internet" noto="Holland">
 			<set name="Common Services"/>
-			<application name="snmp">161-162/udp</application>
-			<scoreboard hosts="1" ports="1"/>
+		</direction>
+		<direction name="Holland-Internet interface 1" from="Holland" to="Internet" noto="Holland" routergroup="routers3">
+			<set name="Common Services"/>
+		</direction>
+		<direction name="Holland-Internet interface 2" from="Holland" to="Internet" noto="Holland" routergroup="routers4">
+			<set name="Common Services"/>
+		</direction>
+		<direction name="Holland-Internet subnet" from="Holland" to="Internet" noto="Holland" routergroup="routers2">
+			<set name="Common Services"/>
 		</direction>
 		<direction name="Engeland-Germany" from="England" to="Germany">
 			<set name="Common Services"/>
-			<application name="snmp">161-162/udp</application>
-			<scoreboard hosts="1" ports="1"/>
 		</direction>
 		<direction name="Engeland-France" from="England" to="France">
 			<set name="Common Services"/>
 		</direction>
-		<direction name="Engeland-Internet" from="England" to="Internet">
+		<direction name="Engeland-Internet" from="England" to="Internet" noto="England">
 			<set name="Common Services"/>
 		</direction>
-		<direction name="Duitsland-Internet" from="Germany" to="Internet">
+		<direction name="Duitsland-Internet" from="Germany" to="Internet" noto="Germany">
 			<set name="Common Services"/>
-			<scoreboard hosts="1"/>
 		</direction>
-		<direction name="France-Internet" from="France" to="Internet">
+		<direction name="France-Internet" from="France" to="Internet" noto="France">
 			<set name="Common Services"/>
-			<scoreboard ports="1"/>
+			<set name="Extra Services"/>
+			<scoreboard hosts="1" ports="1"/>
 		</direction>
 		<direction name="France-Germany" from="France" to="Germany">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
 			<scoreboard hosts="1" ports="1"/>
 		</direction>
 		<direction name="Holland-Germany" from="Holland" to="Germany">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
 		</direction>
 		<direction name="Holland-France" from="Holland" to="France">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
 		</direction>
 		<direction name="Belgium-Germany" from="Belgium" to="Germany">
 			<set name="Common Services"/>
-			<scoreboard hosts="1" ports="1"/>
+			<set name="Extra Services"/>
 		</direction>
-		<direction name="Holland-Belgium" from="Holland" to="Belgium">
-			<set name="Common Services"/>
+		<direction name="NotFromHolland-Belgium" nofrom="Holland" to="Belgium">
+			<application name="web">80/tcp,8080/tcp</application>
+			<application name="secureweb">443/tcp</application>
+      			<application name="mailreading">110/tcp,143/tcp</application>
+			<application name="windows">137-139/tcp,137-139/udp,42/tcp,135/tcp,445/tcp</application>
+			<application name="dns">53/udp,53/tcp</application>
+			<services>22-23/tcp,25/tcp,102/tcp,119/tcp</services>
+			<protocols>tcp,udp,icmp</protocols>
+			<multicast/>
+			<tos/>
+			<ftp/>
+			<total/>
+			<scoreboard hosts="1"/>
 		</direction>
 		<direction name="Routers1" routergroup="routers1">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
+			<scoreboard ports="1"/>
 		</direction>
 		<direction name="Routers2" routergroup="routers2">
 			<set name="Common Services"/>
+			<set name="Extra Services"/>
+			<scoreboard hosts="1" ports="1"/>
 		</direction>
-		<direction name="Routers3" routergroup="routers3">
-			<set name="Common Services"/>
-		</direction>
-		<set name="Common Services"/>
-		<application name="snmp">161-162/udp</application>
-		<scoreboard hosts="1" ports="1"/>
 	</directions>
 	<rrddir>/var/flows/reports/rrds</rrddir>
 	<scoredir>/var/flows/score</scoredir>

@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/bin/perl
 
 # ----------------- JKFlow.pm ----------------------
 
@@ -169,7 +169,7 @@ sub parseConfig {
 					if (defined $exporter->{localsubnets}) {
 						print "localsubnets: ".$exporter->{localsubnets};
 						my $list=[];
-						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}{routergroups}) {
+						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}) {
 							push @{$list},$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups};
 						}
 						push @{$list},$routergroup;
@@ -183,7 +183,7 @@ sub parseConfig {
 				}
 			}
 		}
-	}	
+	}
 
 	pushDirections (
 		\%{$config->{directions}{direction}},
@@ -539,13 +539,44 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		parseDirection (
 			\%{$refxml->{$direction}},
 			\%{$ref->{$direction}});
-	
+
 		if (defined $refxml->{$direction}{"routergroup"}) {
+			my $routergroup=$refxml->{$direction}{"routergroup"};
+			print "Direction routergroup=".$routergroup."\n";
+			foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
+				print "Exporter: ".$exporter->{exporter}.", ";
+				$ref->{$direction}{router}{$exporter->{exporter}}={};
+				if (defined $exporter->{interface}) {
+					print "interface: ".$exporter->{interface};
+					$ref->{$direction}{router}{$exporter->{exporter}}{$exporter->{interface}}={};
+				}
+			}
+			$ref->{$direction}{countfunction}=\&countFunction2;
+		} else {
+			$ref->{$direction}{countfunction}=\&countFunction1;
+		}
+
+		# This may have some explanation... Why don't push references of directions into $JKFlow::mylist{routergroup}
+		# if any subnets are defined in the direction ? This is because in countDirections2() these directions will
+		# call countFunction2 (registered here above, because these directions contains routergroup attributes) and will
+		# call countPackets and countApplications by itself so we won't allow calling these functions from within the
+		# router section of wanted().
+
+			if (	defined $refxml->{$direction}{'routergroup'} &&
+			!defined $refxml->{$direction}{'fromsubnets'} &&
+			!defined $refxml->{$direction}{'tosubnets'} &&
+			!defined $refxml->{$direction}{'nofromsubnets'} &&
+			!defined $refxml->{$direction}{'notosubnets'} &&
+			!defined $refxml->{$direction}{'from'} &&
+			!defined $refxml->{$direction}{'to'} &&
+			!defined $refxml->{$direction}{'nofrom'} &&
+			!defined $refxml->{$direction}{'noto'}) {
 			my $list=[];
-			$list=$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}};
-			print "Assign routergroup ".$refxml->{$direction}{"routergroup"}." to ".$direction."\n";
+			my $routergroup=$refxml->{$direction}{"routergroup"};
+			$list=$JKFlow::mylist{routergroup}{$routergroup};
+			print "Assign routergroup ".$routergroup." to ".$direction."\n";
 			push @{$list},$ref->{$direction};
-			$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=$list;
+			$JKFlow::mylist{routergroup}{$routergroup}=$list;
 		}
 	}
 }
@@ -642,7 +673,7 @@ sub wanted {
 					countApplications(\%{$ref->{'application'}},'in');
 				}
 			}
-		} 
+		}
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}) {
 			if ($JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
 			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
@@ -670,13 +701,47 @@ sub wanted {
     return 1;
 }
 
+sub countFunction1($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	countpackets (\%{$direction},$which);
+	countApplications (\%{$direction->{'application'}},$which);
+}
+
+sub countFunction2($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (	defined $direction->{router}{$exporterip} &&
+		defined $direction->{router}{$exporterip}{$input_if}) {
+			countpackets(\%{$direction},'in');
+			countApplications(\%{$direction->{'application'}},'in');
+	}
+	if (	defined $direction->{router}{$exporterip} &&
+		defined $direction->{router}{$exporterip}{$output_if}) {
+			countpackets(\%{$direction},'out');
+			countApplications(\%{$direction->{'application'}},'out');
+	}
+	if (	defined $direction->{router}{$exporterip}{localsubnets}) {
+		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
+		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
+				countpackets(\%{$direction},'in');
+				countApplications(\%{$direction->{'application'}},'in');
+		}
+		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr) &&
+		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
+				countpackets(\%{$direction},'out');
+				countApplications(\%{$direction->{'application'}},'out');
+		}
+	}
+}
+
 sub countDirections {
 my $ref=shift;
 my $which=shift;
 
 	foreach my $direction (keys %{$ref}) {
 		if ( (!defined $ref->{$direction}{'tosubnets'} || ($dstsubnet=${$ref->{$direction}{'tosubnets'}}->match_integer($dstaddr)))
-		&&  (!defined $ref->{$direction}{'fromsubnets'} || ($srcsubnet=${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr))) 
+		&&  (!defined $ref->{$direction}{'fromsubnets'} || ($srcsubnet=${$ref->{$direction}{'fromsubnets'}}->match_integer($srcaddr)))
 		&&  (!defined $ref->{$direction}{'notosubnets'} || (!${$ref->{$direction}{'notosubnets'}}->match_integer($dstaddr))) 
 		&&  (!defined $ref->{$direction}{'nofromsubnets'} || (!${$ref->{$direction}{'nofromsubnets'}}->match_integer($srcaddr))) )
 		{
@@ -732,8 +797,10 @@ sub countDirections2 {
 								if ($direction->{ref}{monitor} eq "Yes") {
 									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet."\n"; 
 								}
-								countpackets (\%{$direction->{ref}},'out');
-								countApplications (\%{$direction->{ref}{application}},'out');
+								#print "Direction:".$direction->{ref}{name}."\n";
+								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'out');
+                        					#countpackets (\$direction->{ref}},'out');
+								#countApplications (\%{$direction->{ref}{application}},'out');
 							}
 						}
 					}
@@ -760,8 +827,10 @@ sub countDirections2 {
 								if ($direction->{ref}{monitor} eq "Yes") {
 									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = ".$srcsubnet.", EXPORTER = ".$exporter. "\n"; 
 								}
-                        					countpackets (\%{$direction->{ref}},'in');
-                        					countApplications (\%{$direction->{ref}{application}},'in');
+								#print "Direction:".$direction->{ref}{name}."\n";
+								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'in');
+								#countpackets (\%{$direction->{ref}},'in');
+								#countApplications (\%{$direction->{ref}{application}},'in');
 							}
 						}
 					}
@@ -1005,7 +1074,7 @@ sub reporttorrdfiles {
 	}
 
 	if (defined $ref->{'application'}) {	
-		foreach my $src ('src','dst') { 
+		foreach my $src ('src','dst') {
 			foreach my $application (keys %{$ref->{'application'}}) {
   	     			$file = $JKFlow::RRDDIR. $dir . "/service_" . $application . "_" . $src . ".rrd";
 				reporttorrd($self,$file,\%{$ref->{'application'}{$application}{$src}},$samplerate);
