@@ -117,8 +117,7 @@ $JKFlow::MCAST_NET  = unpack('N', inet_aton('224.0.0.0'));
 $JKFlow::MCAST_MASK = unpack('N', inet_aton('240.0.0.0'));
 
 $JKFlow::SUBNETS = new Net::Patricia || die "Could not create a trie ($!)\n";
-$JKFlow::fromtrie = new Net::Patricia || die "Could not create a trie ($!)\n";
-$JKFlow::totrie = new Net::Patricia || die "Could not create a trie ($!)\n";
+$JKFlow::trie = new Net::Patricia || die "Could not create a trie ($!)\n";
 &parseConfig;	# Read our config file
 
 sub parseConfig {
@@ -149,8 +148,8 @@ sub parseConfig {
 		parseDirection (
 			\%{$config->{all}},
 			\%{$JKFlow::mylist{all}});
+		generateCountPackets(\%{$JKFlow::mylist{all}});
 	}
-
 
 	if (defined $config->{routergroups}) {
 		if (defined $config->{routergroups}{routergroup}){
@@ -190,9 +189,8 @@ sub parseConfig {
 		\%{$config->{directions}{direction}},
 		\%{$JKFlow::mylist{direction}});
 
-	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
-	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
-
+	pushDirections3( \@{$JKFlow::mylist{'triesubnets'}}, $JKFlow::trie );
+	
 	createwanted();
 }
 
@@ -211,12 +209,15 @@ my $ref=shift;
 	pushServices(
 		$refxml->{services},
 		\%{$ref});
-	if (defined $refxml->{other} && !defined $ref->{other}) {
+	if (defined $refxml->{otherservices}) {
 		$ref->{application}{other}={};
 	}
 	pushProtocols(
 		$refxml->{protocols},
 		\%{$ref->{protocol}});
+	if (defined $refxml->{otherprotocols}) {
+		$ref->{protocol}{other}={};
+	}
 	if (defined $refxml->{direction}) {
 		if (!defined $ref->{direction}) {
 			$ref->{direction}={};
@@ -273,7 +274,7 @@ my $tmp;
 sub pushServices {
 my $refxml=shift;
 my $ref=shift;
-my ($srv,$proto,$start,$end,$tmp,$i);
+my ($srv,$proto,$start,$end,$tmp,$i,$servsym,$protosym);
 
 	foreach my $current (split(/,/,$refxml)) {
 		if ($current =~ /(\S+)\s*\/\s*(\S+)/) {
@@ -290,16 +291,20 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				die "Bad range $start - $end on line $.\n" if
 					($end < $start);
 				for($i=$start;$i<=$end;$i++) {
-					$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($i,getprotobynumber($proto))} = {};
-					$ref->{'service'}{$proto}{$i} = \%{$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($i,getprotobynumber($proto))}};
+					$protosym = getprotobynumber($proto) ? getprotobynumber($proto) : $proto;
+					$servsym = getservbyport($i,$protosym) ? getservbyport($i,$protosym) : $i;
+					$ref->{'application'}{$protosym.'_'.$servsym} = {};
+					$ref->{'service'}{$proto}{$i} = \%{$ref->{'application'}{$protosym.'_'.$servsym}};
 				}
 			} else {
 				if ($srv !~ /\d+/) {
 					$tmp = getservbyname($srv, getprotobynumber($proto)) || die "Unknown service $srv on line $.\n";
 					$srv = $tmp;
 				}
-				$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($srv,getprotobynumber($proto))} = {};
-				$ref->{'service'}{$proto}{$srv} = \%{$ref->{'application'}{getprotobynumber($proto).'_'.getservbyport($srv,getprotobynumber($proto))}};
+				$protosym = getprotobynumber($proto) ? getprotobynumber($proto) : $proto;
+				$servsym = getservbyport($srv,$protosym) ? getservbyport($srv,$protosym) : $srv;
+				$ref->{'application'}{$protosym.'_'.$servsym} = {};
+				$ref->{'service'}{$proto}{$srv} = \%{$ref->{'application'}{$protosym.'_'.$servsym}};
 			}
 		} else {
 			die "Bad Service Item $current on line $.\n";
@@ -368,7 +373,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'fromsubnets'})) {
 				print "Adding fromsubnets subnet $subnet \n";
 				push @{$fromsubnets}, $subnet;
-				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
+				push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
 			}
 		}
@@ -377,7 +382,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'tosubnets'})) {
 				print "Adding tosubnets subnet $subnet \n";
 				push @{$tosubnets}, $subnet;
-				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
+				push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 			}
 		}
@@ -386,7 +391,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'nofromsubnets'})) {
 				print "Adding nofromsubnets subnet $subnet \n";
 				push @{$nofromsubnets}, $subnet;
-				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
+				push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
 			}
 		}
@@ -395,7 +400,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'notosubnets'})) {
 				print "Adding notosubnets subnet $subnet \n";
 				push @{$notosubnets}, $subnet;
-				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
+				push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 			}
 		}
@@ -413,13 +418,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding fromsubnets subnet $subnet \n";
 					push @{$fromsubnets}, $subnet;
-					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 					${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
 				}
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
 					print "Adding nofromsubnets subnet $subnet \n";
 					push @{$nofromsubnets}, $subnet;
-					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 					${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
 				}	
 			}
@@ -438,13 +443,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
 					print "Adding fromsubnets subnet $subnet \n";
 					push @{$fromsubnets}, $subnet;
-					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 					${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
 				}	
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding nofromsubnets subnet $subnet \n";
 					push @{$nofromsubnets}, $subnet;
-					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 					${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
 				}
 			}
@@ -463,13 +468,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding tosubnets subnet $subnet \n";
 					push @{$tosubnets}, $subnet;
-					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 					${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 				}
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
 					print "Adding notosubnets subnet $subnet \n";
 					push @{$notosubnets}, $subnet;
-					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 					${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 				}	
 			}
@@ -488,13 +493,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
 					print "Adding tosubnets subnet $subnet \n";
 					push @{$tosubnets}, $subnet;
-					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'included' };
 					${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 				}
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding notosubnets subnet $subnet \n";
 					push @{$notosubnets}, $subnet;
-					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
+					push @{$JKFlow::mylist{triesubnets}}, { subnet=>$subnet, type=>'excluded' };
 					${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 				}	
 			}
@@ -504,14 +509,14 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		if (@{$nofromsubnets} > 0 && @{$fromsubnets} == 0) {
 			print "Adding fromsubnet 0.0.0.0/0 implicit \n";
 			push @{$fromsubnets}, "0.0.0.0/0";
-			push @{$JKFlow::mylist{fromsubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
+			push @{$JKFlow::mylist{triesubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
 			${$ref->{$direction}{'fromsubnets'}}->add_string("0.0.0.0/0");
 		}
 		# If noto attributes, but not any to attribute defined, assume to="0.0.0.0/0"
 		if (@{$notosubnets} > 0 && @{$tosubnets} == 0) {
 			print "Adding tosubnet 0.0.0.0/0 implicit \n";
 			push @{$tosubnets}, "0.0.0.0/0"; 
-			push @{$JKFlow::mylist{tosubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
+			push @{$JKFlow::mylist{triesubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
 			${$ref->{$direction}{'tosubnets'}}->add_string("0.0.0.0/0");
 		}
 
@@ -530,9 +535,6 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 				$JKFlow::mylist{subnets}{$fromsubnet}{$tosubnet}=$list;
 			}
 		}
-
-		generateCountPackets(\%{$JKFlow::mylist{all}});
-		$JKFlow::mylist{all}{countfunction}=\&countFunction1;
 
 		if (defined $refxml->{$direction}{"routergroup"}) {
 			my $routergroup=$refxml->{$direction}{"routergroup"};
@@ -589,6 +591,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 
 		parseDirection (\%{$refxml->{$direction}}, \%{$ref->{$direction}});
 		generateCountPackets(\%{$ref->{$direction}});
+		
 		#use Data::Dumper;
 		#print Dumper($ref->{$direction});
 
@@ -647,20 +650,25 @@ sub createwanted {
 	my $self = shift;
 
 ';
-	if (defined $JKFlow::mylist{'all'}) {
+	if ((defined $JKFlow::mylist{'all'}) && (defined $JKFlow::mylist{'all'}{'localsubnets'})) {
 	$createwanted.= <<'EOF';
 	# Counting ALL
-	if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
-		if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
-		   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
-			&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'out');
-		}
-		if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
-		   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
-			&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'in');
-		}
+	if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
+	   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
+		&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'out');
 	}
-	#print "Exporter:".$exporterip." Interface:".$output_if."\n";
+	if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
+	   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
+		&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'in');
+	}
+	
+EOF
+	}
+
+	# Counting ALL, but with no localsubnets. Assume everything outbound
+	if ((defined $JKFlow::mylist{'all'}) && (!defined $JKFlow::mylist{'all'}{'localsubnets'})) {
+	$createwanted.= <<'EOF';
+	&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'out');
 
 EOF
 	}
@@ -751,56 +759,41 @@ sub countDirections {
 	my $srcsubnets;
 	my $dstsubnets;
 
-	my $fromtriematch = $JKFlow::fromtrie->match_integer($srcaddr);
-	my $totriematch = $JKFlow::totrie->match_integer($dstaddr);
+	my $srctriematch = $JKFlow::trie->match_integer($srcaddr);
+	my $dsttriematch = $JKFlow::trie->match_integer($dstaddr);
 
-	if ((defined $fromtriematch) && (defined ($srcsubnets = $fromtriematch->{included}))) {
-		if ((defined $totriematch) && (defined ($dstsubnets = $totriematch->{included}))) {
-			foreach my $srcsubnet (@{$srcsubnets}) {
-				foreach my $dstsubnet (@{$dstsubnets}) {
-					#print "SrcSubnet=".$srcsubnet."\n";
-					#print "DstSubnet=".$dstsubnet."\n";
-					if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}) {
-						foreach $direction (@{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}}) {
-							my %i={},%j={};
-							if (	
-							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
-							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
-								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
-								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'out');
-							}
+	if ((defined $srctriematch) && (defined $dsttriematch) && (defined ($srcsubnets = $srctriematch->{included})) && (defined ($dstsubnets = $dsttriematch->{included}))) {
+		foreach my $srcsubnet (@{$srcsubnets}) {
+			foreach my $dstsubnet (@{$dstsubnets}) {
+				#print "SrcSubnet=".$srcsubnet."\n";
+				#print "DstSubnet=".$dstsubnet."\n";
+				if (defined $JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}) {
+					foreach $direction (@{$JKFlow::mylist{subnets}{$srcsubnet}{$dstsubnet}}) {
+						my %i={},%j={};
+						if (	
+						(! grep { ++$i{$_} > 1 } ( @{$srctriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
+						(! grep { ++$j{$_} > 1 } ( @{$dsttriematch->{excluded}},@{$direction->{notosubnets}}))) {
+							#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
+							&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'out');
+						}
+					}
+				}
+				if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}) {
+					foreach $direction (@{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}}) {
+						my %i={},%j={};
+						if (	
+						(! grep { ++$i{$_} > 1 } ( @{$srctriematch->{excluded}},@{$direction->{notosubnets}})) && 
+						(! grep { ++$j{$_} > 1 } ( @{$dsttriematch->{excluded}},@{$direction->{nofromsubnets}}))) {
+							#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
+							&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'in');
 						}
 					}
 				}
 			}
 		}
 	}
-
-	$fromtriematch = $JKFlow::fromtrie->match_integer($dstaddr);
-	$totriematch = $JKFlow::totrie->match_integer($srcaddr);
-        
-	if ((defined $fromtriematch) && (defined ($dstsubnets = $fromtriematch->{included}))) {
-        	if ((defined $totriematch) && (defined ($srcsubnets = $totriematch->{included}))) {
-        		foreach my $dstsubnet (@{$dstsubnets}) {
-                		foreach my $srcsubnet (@{$srcsubnets}) {
-					#print "DstSubnet=".$dstsubnet."\n";
-					#print "SrcSubnet=".$srcsubnet."\n";
-					if (defined $JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}) {
-						foreach $direction (@{$JKFlow::mylist{subnets}{$dstsubnet}{$srcsubnet}}) {
-							my %i={},%j={};
-							if (
-							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
-							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
-								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
-								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'in');
-							}
-						}
-					}
-				}
-			}
-                }
-        }
 }
+
 
 sub generateCountPackets {
 
@@ -809,17 +802,13 @@ sub generateCountPackets {
 	my $ref=shift;
 	my $which=shift;
 	my $typeos;
-
-	if ($tos == 0) {
-		$typeos="normal";
-	} else {
-		$typeos="other";
-	}
+	my $refref;
 
 ';
 
 	if (defined $ref->{'total'}) {
 	$countpackets.= <<'EOF';
+	
 	$ref->{'total'}{$which}{'flows'} ++;
 	$ref->{'total'}{$which}{'bytes'} += $bytes;
 	$ref->{'total'}{$which}{'pkts'} += $pkts;
@@ -829,6 +818,12 @@ EOF
 
 	if (defined $ref->{'tos'}) {
 	$countpackets.= <<'EOF';
+	if ($tos == 0) {
+		$typeos="normal";
+	} else {
+		$typeos="other";
+	}
+	
 	$ref->{'tos'}{$typeos}{$which}{'flows'} ++;
 	$ref->{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
 	$ref->{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
@@ -853,8 +848,20 @@ EOF
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'flows'}++;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'bytes'} += $bytes;
 		$ref->{'protocol'}{$protocol}{'total'}{$which}{'pkts'} += $pkts;
+EOF
 	}
-
+	if (defined $ref->{'protocol'} && defined $ref->{'protocol'}{'other'}) {
+	$countpackets.= <<'EOF';
+	} else {
+		$ref->{'protocol'}{'other'}{'total'}{$which}{'flows'}++;
+		$ref->{'protocol'}{'other'}{'total'}{$which}{'bytes'} += $bytes;
+		$ref->{'protocol'}{'other'}{'total'}{$which}{'pkts'} += $pkts;
+EOF
+	}
+	if (defined $ref->{'protocol'}) {
+	$countpackets.= <<'EOF';
+	}
+	
 EOF
 	}
 
@@ -872,6 +879,17 @@ EOF
 			$application->{'src'}{$which}{'pkts'} += $pkts;
 EOF
 	}
+	if (defined $ref->{'service'} && defined $ref->{'ftp'}) {
+		if  (!defined $ref->{'application'}{'other'}) {
+		$countpackets.= <<'EOF';
+		} else {
+			countftp(\%{$ref->{'ftp'}},$which);
+EOF
+		} else {
+		$countpackets.= <<'EOF';
+		} elsif ( countftp(\%{$ref->{'ftp'}},$which) ) {
+EOF
+	}
 	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'}) {
 	$countpackets.= <<'EOF';
 		} else {
@@ -880,15 +898,13 @@ EOF
 			$ref->{'application'}{'other'}{'dst'}{$which}{'pkts'} += $pkts;
 EOF
 	}
-	if (defined $ref->{'service'}) {
 	$countpackets.= <<'EOF';
 		}
 	}
-
 EOF
 	}
-
-	if (defined $ref->{'ftp'}) {
+	if (!defined $ref->{'service'} && defined $ref->{'ftp'}) {
+	
 	$countpackets.= <<'EOF';
 	countftp(\%{$ref->{'ftp'}},$which);
 
@@ -947,6 +963,7 @@ sub countftp {
 				#	print "Passive FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
 				#}	
 				$ref->{cache}{"$dstaddr:$srcaddr"} = $endtime;
+				return 1;
 			} elsif ( defined $ref->{cache}{"$srcaddr:$dstaddr"} ) {
 				$ref->{'src'}{$which}{'flows'}++;
 				$ref->{'src'}{$which}{'bytes'} += $bytes;
@@ -957,6 +974,7 @@ sub countftp {
 				#	print "Passive FTP session $which: $srcaddr -> $dstaddr $bytes bytes\n";
 				#}	
 				$ref->{cache}{"$srcaddr:$dstaddr"} = $endtime;
+				return 1;
 			} 
 		} elsif ($dstport == 21) {
 			$ref->{'dst'}{$which}{'flows'}++;
@@ -965,6 +983,7 @@ sub countftp {
 			if (!defined $ref->{cache}{"$dstaddr:$srcaddr"}) {
 				$ref->{cache}{"$dstaddr:$srcaddr"}=$endtime;
 			}
+			return 1;
 		} elsif ($srcport == 21) {
 			$ref->{'src'}{$which}{'flows'}++;
 			$ref->{'src'}{$which}{'bytes'} += $bytes;
@@ -972,6 +991,9 @@ sub countftp {
 			if (!defined $ref->{cache}{"$srcaddr:$dstaddr"}) {
 				$ref->{cache}{"$srcaddr:$dstaddr"}=$endtime;
 			}
+			return 1;
+		} else {
+			return 0;
 		}	
 	}
 }
@@ -1057,6 +1079,9 @@ sub reporttorrdfiles {
 			if (!($tmp = getprotobynumber($protocol))) {
 				$tmp = $protocol;
 			}
+			if ($protocol eq 'other') {
+				$tmp = 'other';
+			}
 			$file = $JKFlow::RRDDIR. $dir . "/protocol_" . $tmp . ".rrd";
 			reporttorrd($self,$file,\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
 		}
@@ -1118,20 +1143,16 @@ sub report {
 		if (! -d $JKFlow::SCOREDIR."/all" ) {
 			mkdir($JKFlow::SCOREDIR."/all",0755);
 		}
-		reporttorrdfiles($self,"/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
-		#if (defined $JKFlow::mylist{'all'}{scoreboard}) {
-		#	scoreboard($self, \%{$JKFlow::mylist{'all'}}, "/all");
-		#}
+		reporttorrdfiles($self, $dir."/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
 
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
-		#print "Reporting Direction $direction \n";
 		if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
 			mkdir($JKFlow::RRDDIR . $dir . "/" . $direction ,0755);
 		}
 		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
 			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
-		}	
+		}
 		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
 	}   
 }
