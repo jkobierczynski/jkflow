@@ -16,8 +16,6 @@
 			<otherprotocols/>
 			<multicast/>
 			<tos/>
-			<scoreboard hosts="1" ports="1"/>
-			<scoreboardother hosts="1" ports="1"/>
 		</defineset>
 	</definesets>
 	<sites>
@@ -51,7 +49,14 @@
 		<direction name="Belgium-Internet" from="Belgium" to="Internet" noto="Belgium">
 			<set name="Common Services"/>
 			<set name="Extra Services"/>
-			<scoreboard hosts="1" ports="1"/>
+			<scoreboard hosts="1" ports="1">
+				<report count="5" hostsbase="agghosts5" portsbase="aggports5"/>
+				<report count="15" hostsbase="agghosts15" portsbase="aggports15"/>
+			</scoreboard>
+			<scoreboardother hosts="1" ports="1">
+				<report count="5" hostsbase="agghostsother5" portsbase="aggportsother5"/>
+				<report count="15" hostsbase="agghostsother15" portsbase="aggportsother15"/>
+			</scoreboardother>
 		</direction>
 		<direction name="Holland-Internet" from="Holland" to="Internet" noto="Holland">
 			<set name="Common Services"/>
@@ -80,7 +85,14 @@
 		<direction name="France-Internet" from="France" to="Internet" noto="France">
 			<set name="Common Services"/>
 			<set name="Extra Services"/>
-			<scoreboard hosts="1" ports="1"/>
+			<scoreboard>
+				<report count="5" hostsbase="agghosts5" portsbase="aggports5" scorekeep="20" numkeep="100"/>
+				<report count="15" hostsbase="agghosts15" portsbase="aggports15" scorekeep="20" numkeep="100"/>
+			</scoreboard>
+			<scoreboardother>
+				<report count="5" hostsbase="agghostsother5" portsbase="aggportsother5" scorekeep="20" numkeep="100"/>
+				<report count="15" hostsbase="agghostsother15" portsbase="aggportsother15" scorekeep="20" numkeep="100"/>
+			</scoreboardother>
 		</direction>
 		<direction name="France-Germany" from="France" to="Germany">
 			<set name="Common Services"/>
@@ -111,19 +123,46 @@
 			<tos/>
 			<ftp/>
 			<total/>
-			<scoreboard hosts="1"/>
+			<scoreboard hosts="1" ports="1"/>
 		</direction>
 		<direction name="Routers1" routergroup="routers1">
 			<set name="Common Services"/>
 			<set name="Extra Services"/>
-			<scoreboard ports="1"/>
+			<scoreboard>
+				<report count="5" hostsbase="agghosts5" portsbase="aggports5" />
+				<report count="15" hostsbase="agghosts15" portsbase="aggports15"/>
+			</scoreboard>
+			<scoreboardother>
+				<report count="5" hostsbase="agghostsother5" portsbase="aggportsother5" />
+				<report count="15" hostsbase="agghostsother15" portsbase="aggportsother15" />
+			</scoreboardother>
 		</direction>
 		<direction name="Routers2" routergroup="routers2">
 			<set name="Common Services"/>
 			<set name="Extra Services"/>
-			<scoreboard hosts="1" ports="1"/>
+			<scoreboard hosts="1" ports="1" latesthosts="latesthosts.html" latestports="latestports.html">
+				<report count="5" hostsbase="agghosts5" portsbase="aggports5"/>
+				<report count="15" hostsbase="agghosts15" portsbase="aggports15"/>
+			</scoreboard>
+			<scoreboardother hosts="1" ports="1" latesthosts="latesthosts.html" latestports="latestports.html">
+				<report count="5" hostsbase="agghostsother5" portsbase="aggportsother5"/>
+				<report count="15" hostsbase="agghostsother15" portsbase="aggportsother15"/>
+			</scoreboardother>
+		</direction>
+		<direction name="other">
+			<set name="Common Services"/>
+			<set name="Extra Services"/>
+			<scoreboard>
+				<report count="5" hostsbase="agghosts5" portsbase="aggports5" />
+				<report count="15" hostsbase="agghosts15" portsbase="aggports15"/>
+			</scoreboard>
+			<scoreboardother>
+				<report count="5" hostsbase="agghostsother5" portsbase="aggportsother5" />
+				<report count="15" hostsbase="agghostsother15" portsbase="aggportsother15"/>
+			</scoreboardother>
 		</direction>
 	</directions>
 	<rrddir>/var/flows/reports/rrds</rrddir>
 	<scoredir>/var/flows/score</scoredir>
+	<sampletime>300</sampletime>
 </config>
