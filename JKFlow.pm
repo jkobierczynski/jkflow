@@ -105,6 +105,7 @@ $JKFlow::NUMKEEP = 50;		# How many aggregates to keep
 my(%myservices);
 my(%myalllist);
 my($subnet);
+my($config);
 
 my($flowrate) = 1;
 
@@ -124,8 +125,8 @@ sub parseConfig {
     my($num,$dir,$current,$start,$end,$i,$subnet,$router,$networkname);
 
 	use XML::Simple;
-	my $config=XMLin('/usr/local/bin/JKFlow.xml',
-		forcearray=>['router','interface','subnet','network','direction','application']);
+	$config=XMLin('/usr/local/bin/JKFlow.xml',
+		forcearray=>['router','interface','subnet','network','direction','application','defineset','set']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
@@ -297,6 +298,14 @@ my $ref=shift;
 			$ref->{write}=$refxml->{write};
  		} else {
 			$ref->{write}="yes";
+		}
+		if (defined $refxml->{set}) {
+			foreach my $set (keys %{$refxml->{set}}) {
+				print "parseDirection: ".$set."\n";
+				parseDirection(
+					\%{$config->{definesets}{defineset}{$set}},
+					$ref);
+			}
 		}
 }
 
