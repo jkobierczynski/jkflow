@@ -407,8 +407,8 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			if (!defined $ref->{$direction}{'nofromsubnets'}) {
 				${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
-			print "Adding fromsubnets ".$refxml->{$direction}{"from"}."\n";
-			foreach my $site (split(/,/,$refxml->{$direction}{'from'})) {
+			print "Adding fromsubnets ".$refxml->{$direction}{from}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{from})) {
 				print "Adding fromsite $site \n";
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding fromsubnets subnet $subnet \n";
@@ -425,6 +425,31 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
+		if (defined $refxml->{$direction}{"nofrom"}) {
+			if (!defined $ref->{$direction}{'fromsubnets'}) {
+				${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			if (!defined $ref->{$direction}{'nofromsubnets'}) {
+				${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			print "Adding nofromsubnets ".$refxml->{$direction}{nofrom}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{nofrom})) {
+				print "Adding nofromsite $site \n";
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
+					print "Adding fromsubnets subnet $subnet \n";
+					push @{$fromsubnets}, $subnet;
+					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
+					${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
+				}	
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
+					print "Adding nofromsubnets subnet $subnet \n";
+					push @{$nofromsubnets}, $subnet;
+					push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
+					${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
+				}
+			}
+		}
+
 		if (defined $refxml->{$direction}{"to"}) {
 			if (!defined $ref->{$direction}{'tosubnets'}) {
 				${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
@@ -432,8 +457,8 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			if (!defined $ref->{$direction}{'notosubnets'}) {
 				${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
-			print "Adding tosubnets ".$refxml->{$direction}{"to"}."\n";
-			foreach my $site (split(/,/,$refxml->{$direction}{'to'})) {
+			print "Adding tosubnets ".$refxml->{$direction}{to}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{to})) {
 				print "Adding tosite $site \n";
 				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
 					print "Adding tosubnets subnet $subnet \n";
@@ -448,6 +473,46 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 					${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 				}	
 			}
+		}
+
+		if (defined $refxml->{$direction}{"noto"}) {
+			if (!defined $ref->{$direction}{'tosubnets'}) {
+				${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			if (!defined $ref->{$direction}{'notosubnets'}) {
+				${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			}
+			print "Adding notosubnets ".$refxml->{$direction}{noto}."\n";
+			foreach my $site (split(/,/,$refxml->{$direction}{noto})) {
+				print "Adding tosite $site \n";
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{nosubnets})) {
+					print "Adding tosubnets subnet $subnet \n";
+					push @{$tosubnets}, $subnet;
+					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
+					${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
+				}
+				foreach my $subnet (split(/,/,$config->{sites}{site}{$site}{subnets})) {
+					print "Adding notosubnets subnet $subnet \n";
+					push @{$notosubnets}, $subnet;
+					push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
+					${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
+				}	
+			}
+		}
+
+		# If nofrom attributes, but not any from attribute defined, assume from="0.0.0.0/0"
+		if (@{$nofromsubnets} > 0 && @{$fromsubnets} == 0) {
+			print "Adding fromsubnet 0.0.0.0/0 implicit \n";
+			push @{$fromsubnets}, "0.0.0.0/0";
+			push @{$JKFlow::mylist{fromsubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
+			${$ref->{$direction}{'fromsubnets'}}->add_string("0.0.0.0/0");
+		}
+		# If noto attributes, but not any to attribute defined, assume to="0.0.0.0/0"
+		if (@{$notosubnets} > 0 && @{$tosubnets} == 0) {
+			print "Adding tosubnet 0.0.0.0/0 implicit \n";
+			push @{$tosubnets}, "0.0.0.0/0"; 
+			push @{$JKFlow::mylist{tosubnets}}, { subnet=>"0.0.0.0/0", type=>'included' };
+			${$ref->{$direction}{'tosubnets'}}->add_string("0.0.0.0/0");
 		}
 
 		foreach my $fromsubnet (@{$fromsubnets}) {
@@ -545,8 +610,6 @@ sub wanted {
 				countApplications(\%{$JKFlow::mylist{'all'}{'application'}},'out');
 				#countDirections(\%{$JKFlow::mylist{'all'}{'direction'}},'out');
 			} 
-		}
-		if (defined $JKFlow::mylist{'all'}{'localsubnets'}) {
 			if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr) &&
 			   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
 				countpackets(\%{$JKFlow::mylist{'all'}},'in');
