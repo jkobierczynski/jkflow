@@ -161,7 +161,7 @@ sub parseConfig {
 						print "interface: ".$exporter->{interface};
 						my $list=[];
 						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}) {
-							push @{$list},$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups};
+							push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}};
 						}
 						push @{$list},$routergroup;
 						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}=$list;
@@ -170,7 +170,7 @@ sub parseConfig {
 						print "localsubnets: ".$exporter->{localsubnets};
 						my $list=[];
 						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}) {
-							push @{$list},$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups};
+							push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}};
 						}
 						push @{$list},$routergroup;
 						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{routergroups}=$list;
@@ -536,20 +536,20 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		} else {
 			$ref->{$direction}{monitor}="No";
 		}
-		parseDirection (
-			\%{$refxml->{$direction}},
-			\%{$ref->{$direction}});
 
 		if (defined $refxml->{$direction}{"routergroup"}) {
 			my $routergroup=$refxml->{$direction}{"routergroup"};
 			print "Direction routergroup=".$routergroup."\n";
 			foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
 				print "Exporter: ".$exporter->{exporter}.", ";
-				$ref->{$direction}{router}{$exporter->{exporter}}={};
+				if (!defined $ref->{$direction}{router}{$exporter->{exporter}}) {
+					$ref->{$direction}{router}{$exporter->{exporter}}={};
+				}
 				if (defined $exporter->{interface}) {
 					print "interface: ".$exporter->{interface};
 					$ref->{$direction}{router}{$exporter->{exporter}}{$exporter->{interface}}={};
 				}
+				print "\n";
 			}
 			$ref->{$direction}{countfunction}=\&countFunction2;
 		} else {
@@ -562,7 +562,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 		# call countPackets and countApplications by itself so we won't allow calling these functions from within the
 		# router section of wanted().
 
-			if (	defined $refxml->{$direction}{'routergroup'} &&
+		if (	defined $refxml->{$direction}{'routergroup'} &&
 			!defined $refxml->{$direction}{'fromsubnets'} &&
 			!defined $refxml->{$direction}{'tosubnets'} &&
 			!defined $refxml->{$direction}{'nofromsubnets'} &&
@@ -573,11 +573,16 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			!defined $refxml->{$direction}{'noto'}) {
 			my $list=[];
 			my $routergroup=$refxml->{$direction}{"routergroup"};
-			$list=$JKFlow::mylist{routergroup}{$routergroup};
-			print "Assign routergroup ".$routergroup." to ".$direction."\n";
+			if (defined $JKFlow::mylist{routergroup}{$routergroup}) {
+				push @{$list},@{$JKFlow::mylist{routergroup}{$routergroup}};
+			}
+			print "Assign routergroup ".$routergroup." to Direction ".$direction."\n";
 			push @{$list},$ref->{$direction};
 			$JKFlow::mylist{routergroup}{$routergroup}=$list;
 		}
+		parseDirection (
+		\%{$refxml->{$direction}},
+		\%{$ref->{$direction}});
 	}
 }
 
@@ -653,7 +658,7 @@ sub wanted {
 
 	# Counting for Routers
 	if (defined $JKFlow::mylist{routers}{router}{$exporterip}) {
-		my $routergroup = $JKFlow::mylist{routers}{router}{$exporterip};
+		#my $routergroup = $JKFlow::mylist{routers}{router}{$exporterip};
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$output_if}) {
 			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$output_if}{routergroups}}) {
 				#use Data::Dumper;
@@ -797,7 +802,7 @@ sub countDirections2 {
 								if ($direction->{ref}{monitor} eq "Yes") {
 									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet."\n"; 
 								}
-								#print "Direction:".$direction->{ref}{name}."\n";
+								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
 								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'out');
                         					#countpackets (\$direction->{ref}},'out');
 								#countApplications (\%{$direction->{ref}{application}},'out');
@@ -827,7 +832,7 @@ sub countDirections2 {
 								if ($direction->{ref}{monitor} eq "Yes") {
 									print "D2 DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = $dstsubnet, SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = ".$srcsubnet.", EXPORTER = ".$exporter. "\n"; 
 								}
-								#print "Direction:".$direction->{ref}{name}."\n";
+								#print "Direction:".$direction->{ref}{name}." InputInt:".$input_if." OutputInt:".$output_if."\n";
 								&{$direction->{ref}{countfunction}}(\%{$direction->{ref}},'in');
 								#countpackets (\%{$direction->{ref}},'in');
 								#countApplications (\%{$direction->{ref}{application}},'in');
