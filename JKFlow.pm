@@ -119,7 +119,8 @@ sub parseConfig {
     my($num,$dir,$current,$start,$end,$i,$subnet,$router,$networkname);
 
 	use XML::Simple;
-	my $config=XMLin('/usr/local/bin/JKFlow.xml');
+	my $config=XMLin('/usr/local/bin/JKFlow.xml',
+		forcearray=>['router','subnet','network','direction','application']);
 
 	$JKFlow::OUTDIR = $config->{outputdir};
 

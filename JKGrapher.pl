@@ -19,7 +19,7 @@ my $hours = 48;
 # duration of graph, starting from $hours ago
 my $duration;
 # organization name
-my $organization = "Pharmacia WAN";
+my $organization = "Corporate WAN";
 # default graph width
 my $width = 800;
 # default graph height
