@@ -287,8 +287,8 @@ sub parseConfig {
 
 	}	
 
-	pushDirections2( \%{$config->{fromsubnets}}, $JKFlow::fromtrie );
-	pushDirections2( \%{$config->{tosubnets}}, $JKFlow::totrie );
+	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
+	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
 
 	
 	if (defined $config->{router}{total_router}) {
@@ -395,14 +395,13 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 
 	foreach my $direction (keys %{$refxml}) {
 		print "Adding direction $direction\n";
-		if (! defined $refxml->{'name'}) {
-			$refxml->{'name'}="default";
-		}
+		$ref->{$direction}{name}=$direction;
 		
 		if (defined $refxml->{$direction}{'fromsubnets'}) {
 			${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'fromsubnets'})) {
 				print "Adding fromsubnets subnet $subnet \n";
+				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'fromsubnets'}}->add_string($subnet);
 			}
 		}
@@ -410,6 +409,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'tosubnets'})) {
 				print "Adding tosubnets subnet $subnet \n";
+				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'included' };
 				${$ref->{$direction}{'tosubnets'}}->add_string($subnet);
 			}
 		}
@@ -417,6 +417,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'nofromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'nofromsubnets'})) {
 				print "Adding nofromsubnets subnet $subnet \n";
+				push @{$JKFlow::mylist{fromsubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'nofromsubnets'}}->add_string($subnet);
 			}
 		}
@@ -424,6 +425,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			${$ref->{$direction}{'notosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			foreach my $subnet (split(/,/,$refxml->{$direction}{'notosubnets'})) {
 				print "Adding notosubnets subnet $subnet \n";
+				push @{$JKFlow::mylist{tosubnets}}, { subnet=>$subnet, type=>'excluded' };
 				${$ref->{$direction}{'notosubnets'}}->add_string($subnet);
 			}
 		}
@@ -496,39 +498,38 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 	}
 }
 
-sub pushDirections2 {
-my $refxml=shift;
+sub pushDirections3 {
+my $subnetlist=shift;
 my $ref=shift;
-my ($srv,$proto,$start,$end,$tmp,$i,$subnet);
+my %seen=();
 
-		foreach $subnet (@{$refxml->{'subnet'}}) {
+	@sortedlist = 
+	sort {
+		my @c=split /\//, $a->{subnet};
+		my @d=split /\//, $b->{subnet};
+		$c[1] <=> $d[1];
+		}  @{$subnetlist};
 
-			foreach my $addsubnet (split /,/, $subnet->{'subnets'}) {
-				my %seen = ();
-				my $includedlist = [];
-				my $excludedlist = [];
-				if (defined $ref->match_string($addsubnet)) {
-					push @{$includedlist}, @{${$ref->match_string($addsubnet)}{included}};
-					push @{$excludedlist}, @{${$ref->match_string($addsubnet)}{excluded}};
-				}
-				@{$includedlist} = grep { ! $seen{$_} ++ } ( @{$includedlist}, $addsubnet );
-				$ref->add_string($addsubnet,{included=>$includedlist,excluded=>$excludedlist});
-			}
-			
-			foreach my $addsubnet (split /,/, $subnet->{'nosubnets'}) {
-				my %seen = ();
-				my $includedlist = [];
-				my $excludedlist = [];
-				if (defined $ref->match_string($addsubnet)) {
-					push @{$includedlist}, @{${$ref->match_string($addsubnet)}{included}};
-					push @{$excludedlist}, @{${$ref->match_string($addsubnet)}{excluded}};
-				}
-				@{$excludedlist} = grep { ! $seen{$_} ++ } ( @{$excludedlist}, $addsubnet );
-				$ref->add_string($addsubnet,{included=>$includedlist,excluded=>$excludedlist});
-			}
-			pushDirections2($subnet,$ref);
+	@sortedlist = grep {! $seen{$_->{subnet}.$_->{type}}++ } @sortedlist;
+
+	foreach my $addsubnet (@sortedlist) {
+		my %seen = ();
+		my $includedlist = [];
+		my $excludedlist = [];
+		if (defined $ref->match_string($addsubnet->{subnet})) {
+			push @{$includedlist}, @{${$ref->match_string($addsubnet->{subnet})}{included}};
+			push @{$excludedlist}, @{${$ref->match_string($addsubnet->{subnet})}{excluded}};
 		}
+		if ($addsubnet->{type} eq 'included') {
+			@{$includedlist} = grep { ! $seen{$_} ++ } ( @{$includedlist}, $addsubnet->{subnet} );
+		} else {
+			@{$excludedlist} = grep { ! $seen{$_} ++ } ( @{$excludedlist}, $addsubnet->{subnet} );
+		}
+		$ref->add_string($addsubnet->{subnet},{included=>$includedlist,excluded=>$excludedlist});
+	}
 }
+
+
 
 sub new {
    my $self = {};
