@@ -126,7 +126,6 @@ sub parseConfig {
 
 	use XML::Simple;
 	$config=XMLin('/usr/local/bin/JKFlow.xml',
-#		keyattr => { router => 'exporter'},
 		forcearray=>[	'router','routergroup','interface','subnet','site','network',
 				'direction','application','defineset','set']);
 
@@ -186,70 +185,9 @@ sub parseConfig {
 		}
 	}	
 
-	#foreach my $routername (keys %{$config->{routers}{router}}) {
-	#	print "Routers: + router $routername\n";
-	#	if (defined $config->{routers}{router}{$routername}{localsubnets}) {
-	#		$JKFlow::mylist{routers}{router}{$routername}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
-	#		foreach my $subnet (split(/,/,$config->{routers}{router}{$routername}{localsubnets})) {
-	#			print "Routers: router $routername + localsubnets subnet $subnet\n";
-	#			$JKFlow::mylist{routers}{router}{$routername}{localsubnets}->add_string($subnet);
-	#		}
-	#	}
-	#	foreach my $router (split(/,/,$config->{routers}{router}{$routername}{routers})) {
-	#		print "Routers: router $routername + routerip $router\n";
-	#		$JKFlow::mylist{'router'}{$routername}{'routers'}{$router}={};
-	#	}
-	#	if (defined $config->{routers}{router}{$routername}{interface}) {
-	#		foreach my $interfacecode (keys %{$config->{routers}{router}{$routername}{interface}}) {
-	#			print "Routers: router $routername + interface $interfacecode\n";
-	#			if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{description}) {
-	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{description}=$config->{routers}{router}{$routername}{interface}{$interfacecode}{description};
-	#			}
-	#			if (defined $config->{routers}{router}{$routername}{interface}{$interfacecode}{samplerate}) {
-	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=$config->{'router'}{$routername}{interface}{$interfacecode}{samplerate};
-	#			} else {
-	#				$JKFlow::mylist{'router'}{$routername}{interface}{$interfacecode}{samplerate}=1;
-	#			}
-	#			parseDirection (
-	#				\%{$config->{routers}{router}{$routername}{interface}{$interfacecode}},
-	#				\%{$JKFlow::mylist{router}{$routername}{interface}{$interfacecode}});
-	#		}
-	#	}
-	#
-	#	if (defined $config->{routers}{router}{$routername}{samplerate}) {
-	#		$JKFlow::mylist{router}{$routername}{samplerate}=$config->{routers}{router}{$routername}{samplerate};
-	#	} else {
-	#		$JKFlow::mylist{router}{$routername}{samplerate}=1;
-	#	}
-	#	parseDirection (
-	#		\%{$config->{routers}{router}{$routername}},
-	#		\%{$JKFlow::mylist{router}{$routername}});
-	#		
-	#}
-
 	pushDirections (
 		\%{$config->{directions}{direction}},
 		\%{$JKFlow::mylist{direction}});
-
-
-	#foreach my $network (keys %{$config->{networks}{network}}) {
-	#	if (defined $config->{netwerks}{network}{$network}{direction}) { 
-	#		$JKFlow::mylist{'netwerk'}{$network}{'direction'}={};
-	#		pushDirections(
-	#			$config->{networks}{network}{$network}{direction},
-	#			\%{$JKFlow::mylist{'network'}{$network}{'direction'}});
-	#	}
-	#	if (defined $config->{networks}{network}{$network}{routers}) {
-	#		foreach my $router (split(/,/,$config->{networks}{network}{$network}{routers})) {
-	#			$JKFlow::mylist{'network'}{$network}{'router'}{$router}={};
-	#		}
-	#	}
-	#	if (defined $config->{networks}{network}{$network}{subnets}) {
-	#		foreach my $subnet (split(/,/,$config->{networks}{network}{$network}{subnets})) {
-	#			$JKFlow::mylist{'network'}{$network}{'subnet'}{$subnet}={};
-	#		}
-	#	}
-	#}	
 
 	pushDirections3( \@{$JKFlow::mylist{'fromsubnets'}}, $JKFlow::fromtrie );
 	pushDirections3( \@{$JKFlow::mylist{'tosubnets'}}, $JKFlow::totrie );
@@ -544,16 +482,6 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			push @{$list},$ref->{$direction};
 			$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=$list;
 		}
-	
-		#if (defined $refxml->{$direction}{"routergroup"}) {
-		#	print "push direction to routergroup\n";
-		#	if (defined $JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}) {
-		#		die "You can assign routergroup ".$refxml->{$direction}{"routergroup"}." only once!\n";
-		#	}
-		#	print "Assign routergroup ".$refxml->{$direction}{"routergroup"}." to ".$direction."\n";
-		#	$JKFlow::mylist{routergroup}{$refxml->{$direction}{"routergroup"}}=\%{$ref->{$direction}};
-		#}
-
 	}
 }
 
@@ -661,31 +589,6 @@ sub wanted {
 		}
 	}
 
-	# Counting for specific Routers
-	#foreach my $routername (keys %{$JKFlow::mylist{'router'}}) {
-	#	$which = 'out';
-	#	if (defined $JKFlow::mylist{'router'}{$routername}{'localsubnets'}) {
-	#		if ($JKFlow::mylist{'router'}{$routername}{'localsubnets'}->match_integer($dstaddr)) {
-	#			$which = 'in';
-	#		} 
-	#	}
-	#	if (defined $JKFlow::mylist{'router'}{$routername}{'routers'}{$exporterip}) {
-	#		#Added Interfaces monitoring
-	#		if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}) {
-	#			countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}},'out');
-	#			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'application'}},'out');
-	#			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$output_if}{'direction'}},'out');
-	#		} 
-	#		if ( defined $JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}) {
-	#			countpackets(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}},'in');
-	#			countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'application'}},'in');
-	#			#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'interface'}{$input_if}{'direction'}},'in');
-	#		}
-	#		countpackets(\%{$JKFlow::mylist{'router'}{$routername}},$which);
-	#		countApplications(\%{$JKFlow::mylist{'router'}{$routername}{'application'}},$which);
-	#		#countDirections(\%{$JKFlow::mylist{'router'}{$routername}{'direction'}},$which);
-	#	}
-	#}
 	countDirections2();
 
     return 1;
@@ -1118,22 +1021,6 @@ sub report {
 	my($count, $i ,$j ,$k , $tmp,$srv,$rt,$sn, $subnetdir,$routerdir);
 	my $interf_name;
 
-	#use Data::Dumper;
-	#print Dumper($JKFlow::mylist{routergroup});
-
-	#if (defined $JKFlow::mylist{'total_router'}) {
-	#	foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-	#		summarize(\%{$JKFlow::mylist{'total_router'}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
-	#	}
-	#}
-
-	#foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
- 	#	foreach my $router (keys %{$JKFlow::mylist{'network'}{$network}{'router'}}) {
-	#		print "Summarize $network, $router \n";
-	#		summarize(\%{$JKFlow::mylist{'network'}{$network}},\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
-	#	}
-	#}  
-	
 	if (${$JKFlow::mylist{'all'}}{'write'} eq 'yes') {
 		if (! -d $JKFlow::RRDDIR."/all" ) {
 			mkdir($JKFlow::RRDDIR."/all",0755);
@@ -1147,55 +1034,6 @@ sub report {
 		}
 	}
 
-	#if (! -d $JKFlow::RRDDIR."/total_router" ) {
-	#	mkdir($JKFlow::RRDDIR."/total_router",0755);
-	#}
-	#reporttorrdfiles($self,"/total_router",\%{$JKFlow::mylist{'total_router'}},1);
-
-	#foreach my $router (keys %{$JKFlow::mylist{'router'}}) {
-	#	if (${$JKFlow::mylist{'router'}{$router}}{'write'} eq 'yes') {
-	#		print "Router:$router\n";
-	#		if (! -d $JKFlow::RRDDIR . "/router_$router" ) {
-	#			mkdir($JKFlow::RRDDIR . "/router_$router",0755);
-	#		}
-	#		if (! -d $JKFlow::SCOREDIR . "/router_$router" ) {
-	#			mkdir($JKFlow::SCOREDIR . "/router_$router",0755);
-	#		}
-	#		reporttorrdfiles($self,"/router_".$router,\%{$JKFlow::mylist{'router'}{$router}},$JKFlow::mylist{'router'}{$router}{'samplerate'});
-	#		if (defined $JKFlow::mylist{'router'}{$router}{scoreboard}) { 
-	#			scoreboard($self, \%{$JKFlow::mylist{'router'}{$router}{scoreboard}}, "/router_".$router);
-	#		}
-	#		
-	#	}
-	#	if (defined $JKFlow::mylist{'router'}{$router}{'interface'}) {
-	#		foreach my $interface (keys %{$JKFlow::mylist{'router'}{$router}{'interface'}}) {
-	#		#use Data::Dumper;
-	#		#print "INTERFACES:".Dumper($JKFlow::mylist{'router'}{$router}{'interface'})."\n";
-	#			if (defined $JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{description}) {
-	#				$interf_name = ${$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}}{description};
-	#				if (! -d $JKFlow::RRDDIR."/router_$router/$interf_name" ) {
-	#					mkdir($JKFlow::RRDDIR."/router_$router/$interf_name",0755);
-	#				}
-	#				if (! -d $JKFlow::SCOREDIR."/router_$router/$interf_name" ) {
-	#					mkdir($JKFlow::SCOREDIR."/router_$router/$interf_name",0755);
-	#				}
-	#				reporttorrdfiles($self,"/router_".$router."/".$interf_name,\%{$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}},$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{'samplerate'});
-	#			} else {
-	#				if (! -d $JKFlow::RRDDIR."/router_$router/interface_$interface" ) {
-	#					mkdir($JKFlow::RRDDIR."/router_$router/interface_$interface", 0755);
-	#				}
-	#				if (! -d $JKFlow::SCOREDIR."/router_$router/interface_$interface" ) {
-	#					mkdir($JKFlow::SCOREDIR."/router_$router/interface_$interface", 0755);
-	#				}
-	#				reporttorrdfiles($self,"/router_".$router."/interface_".$interface,\%{$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}},$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{'samplerate'});
-	#			}
-	#			if (defined $JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{scoreboard}) {
-	#				scoreboard($self, \%{$JKFlow::mylist{'router'}{$router}{'interface'}{$interface}{scoreboard}}, "/router_".$router);
-	#			}
-	#		}
-	#	}
-	#}
-
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
 		print "Reporting Direction $direction \n";
 		if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
@@ -1204,22 +1042,8 @@ sub report {
 		if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
 			mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
 		}	
-		#reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist->{'direction'}{$direction}{'samplerate'});
-		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},1);
-	}
-    
-	#foreach my $network (keys %{$JKFlow::mylist{'network'}}) {
-	#	if (! -d $JKFlow::RRDDIR."/network_".$network ) {
-	#		mkdir($JKFlow::RRDDIR."/network_".$network,0755);
-	#	}
-	#	if (! -d $JKFlow::SCOREDIR."/network_".$network ) {
-	#		mkdir($JKFlow::SCOREDIR."/network_".$network,0755);
-	#	}
-	#	reporttorrdfiles($self,"/network_".$network,\%{$JKFlow::mylist{'network'}{$network}},1);
-	#	if (defined $JKFlow::mylist{'network'}{$network}{scoreboard}) {
-	#		scoreboard($self, \%{$JKFlow::mylist{'network'}{$network}{scoreboard}}, "/network_".$network);
-	#	}
-	#}
+		reporttorrdfiles($self, $dir . "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
+	}   
 }
 
 # Lifted totally and shamelessly from CampusIO.pm
