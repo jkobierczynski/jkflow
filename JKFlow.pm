@@ -79,7 +79,6 @@ use Net::Patricia;		# Fast IP/mask lookups
 use POSIX;			# We need floor()
 use FindBin;			# To find our executable
 use XML::Simple;
-	my $counterke;
 
 my(%ROUTERS);			# A hash mapping exporter IP's to the name
 				# we want them to be called, e.g.
@@ -443,42 +442,9 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{'application'}) { 
-			$ref->{$direction}{application}={};
-			pushApplications( 
-				$refxml->{$direction}{'application'},
-				$ref->{$direction}{'application'});
-		}
-		if (defined $refxml->{$direction}{'services'}) {
-			$ref->{$direction}{'service'}={};
-			pushServices(
-				$refxml->{$direction}{'services'},
-				$ref->{$direction}{'service'});
-		}
-		if (defined $refxml->{$direction}{'protocols'}) {
-			$ref->{$direction}{'protocol'}={};
-			pushProtocols(
-				$refxml->{$direction}{'protocols'},
-				$ref->{$direction}{'protocol'});
-		}
-		if (defined $refxml->{$direction}{'direction'}) {
-			$ref->{$direction}{'direction'}={};
-			pushDirections(
-				$refxml->{$direction}{'direction'},
-				$ref->{$direction}{'direction'});
-		}
-		if (defined $refxml->{$direction}{'ftp'}) {
-			$ref->{$direction}{'ftp'}={};
-		}
-		if (defined $refxml->{$direction}{'multicast'}) {
-			$ref->{$direction}{'multicast'}={};
-		}
-		if (defined $refxml->{$direction}{'tos'}) {
-			$ref->{$direction}{'tos'}={};
-		}
-		if (defined $refxml->{$direction}{'total'}) {
-			$ref->{$direction}{'total'}={};
-		}
+		parseDirection (
+			\%{$refxml->{$direction}},
+			\%{$ref->{$direction}});
 	}
 }
 
@@ -534,8 +500,6 @@ sub wanted {
     my $self = shift;
     my $which;
 
-	#$counterke++;
-	#print $counterke."\n";
 	# Counting ALL
 	if (defined $JKFlow::mylist{'all'}) {
 		$which = 'out';
@@ -670,7 +634,7 @@ sub countDirections2 {
 							(! grep { ++$i{$_} > 1 } ( @{$fromtriematch->{excluded}},@{$direction->{nofromsubnets}})) && 
 							(! grep { ++$j{$_} > 1 } ( @{$totriematch->{excluded}},@{$direction->{notosubnets}}))) {
 								if ($direction->{ref}{monitor} eq "Yes") {
-									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet.", EXPORTER = ".$exporter. "\n"; 
+									print "D2 SRC = ".inet_ntoa(pack(N,$srcaddr)).", SRCSUBNET = $srcsubnet, DST = ".inet_ntoa(pack(N,$dstaddr)).", DSTSUBNET = ".$dstsubnet."\n"; 
 								}
 								countpackets (\%{$direction->{ref}},'out');
 								countApplications (\%{$direction->{ref}{application}},'out');
