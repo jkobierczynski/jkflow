@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#! /usr/local/bin/perl -w
 
 # CUGrapher.pl
 # $Revision$
@@ -178,56 +178,56 @@ sub showMenu {
     print $q->start_table( { align => 'center',
 			     -border => '1' } );
 
-    print $q->Tr( { -align => 'center' },
-		  $q->td( i('Global') ),
-		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
-		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
-		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
-		  $q->td( i('Network') ),
-		  $q->td( i('Total') ) );    
-
-    print $q->start_Tr;
-
-    print $q->td( { -align => 'center' }, "All",
-		      $q->hidden( -name => 'router', -default => "all" ) );
-
-    print $q->td( $q->scrolling_list( -name => "all_protocol",
-				      -values => [sort &getProtocolList("")],
-				      -size => 5,
-				      -multiple => 'true' ) );
-
-    print $q->td( $q->checkbox( -name => "all_all_protocols",
-				-value => '1',
-				-label => 'Yes' ) );
-	
-    print $q->td( $q->scrolling_list( -name => "all_service",
-				      -values => [sort &getServiceList("")],
-				      -size => 5,
-				      -multiple => 'true' ) );
-
-    print $q->td( $q->checkbox( -name => "all_all_services",
-				-value => '1',
-				-label => 'Yes' ) );
-
-    print $q->td( $q->scrolling_list( -name => "all_tos",
-				      -values => [sort &getTOSList("")],
-			              -size => 5,
-				      -multiple => 'true' ) );
-
-    print $q->td( $q->checkbox( -name => "all_all_tos",
-				-value => '1',
-				-label => 'Yes' ) );
-
-    print $q->td( $q->scrolling_list( -name => "all_network",
-				      -values => [sort &getNetworkList()],
-				      -size => 5,
-			              -multiple => 'true' ) );
-	
-    print $q->td( $q->checkbox( -name => "all_total",
-				    -value => '1',
-				    -label => 'Yes') );
-	
-    print $q->end_Tr;
+#    print $q->Tr( { -align => 'center' },
+#		  $q->td( i('Global') ),
+#		  $q->td( i('Protocol') ), $q->td( i('All Protos') ),
+#		  $q->td( i('Service') ), $q->td( i('All Svcs') ),
+#		  $q->td( i('TOS') ), $q->td( i('All TOS') ),
+#		  $q->td( i('Network') ),
+#		  $q->td( i('Total') ) );    
+#
+#    print $q->start_Tr;
+#
+#    print $q->td( { -align => 'center' }, "All",
+#		      $q->hidden( -name => 'router', -default => "all" ) );
+#
+#    print $q->td( $q->scrolling_list( -name => "all_protocol",
+#				      -values => [sort &getProtocolList("")],
+#				      -size => 5,
+#				      -multiple => 'true' ) );
+#
+#    print $q->td( $q->checkbox( -name => "all_all_protocols",
+#				-value => '1',
+#				-label => 'Yes' ) );
+#	
+#    print $q->td( $q->scrolling_list( -name => "all_service",
+#				      -values => [sort &getServiceList("")],
+#				      -size => 5,
+#				      -multiple => 'true' ) );
+#
+#    print $q->td( $q->checkbox( -name => "all_all_services",
+#				-value => '1',
+#				-label => 'Yes' ) );
+#
+#    print $q->td( $q->scrolling_list( -name => "all_tos",
+#				      -values => [sort &getTOSList("")],
+#			              -size => 5,
+#				      -multiple => 'true' ) );
+#
+#    print $q->td( $q->checkbox( -name => "all_all_tos",
+#				-value => '1',
+#				-label => 'Yes' ) );
+#
+#    print $q->td( $q->scrolling_list( -name => "all_network",
+#				      -values => [sort &getNetworkList()],
+#				      -size => 5,
+#			              -multiple => 'true' ) );
+#	
+#    print $q->td( $q->checkbox( -name => "all_total",
+#				    -value => '1',
+#				    -label => 'Yes') );
+#	
+#    print $q->end_Tr;
 
     print $q->Tr( { -align => 'center' },
 		  $q->td( i('Routers') ),
@@ -296,6 +296,10 @@ sub showMenu {
 		  $q->td( i('Total') ) );    
 
     foreach my $subnet ( sort &getSubnetList() ) {
+        
+	print $q->start_Tr;
+	print $q->end_Tr;
+
 	print $q->start_Tr;
 
 	print $q->td( { -align => 'center' }, $q->b($subnet),
@@ -763,7 +767,7 @@ sub io_report {
 		 '--alt-autoscale');
 
     # CDEF for total
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	if( $reportType eq 'bits' ) {
 	    push @args, ('DEF:'.&cleanDEF("${r}_total_out_bytes").'='.$filename{$r}{'total'}.':out_bytes:AVERAGE',
 			 'DEF:'.&cleanDEF("${r}_total_in_bytes").'='.$filename{$r}{'total'}.':in_bytes:AVERAGE',
@@ -778,7 +782,7 @@ sub io_report {
     }
 	
     # CDEFs for each service
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	foreach my $s (@{$service{$r}}) {
 	    if( $reportType eq 'bits' ) {
 		push @args, ('DEF:'.&cleanDEF("${r}_${s}_src_out_bytes").'='.$filename{$r}{$s}.'_src.rrd:out_bytes:AVERAGE',
@@ -803,7 +807,7 @@ sub io_report {
     }
 
     # CDEFs for service by percentage
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	if( scalar @{$service{$r}} ) {
 	    foreach my $s ( @{$service{$r}} ) {
 		push @args, 'CDEF:'.&cleanDEF("${r}_${s}_in_pct").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").','.&cleanDEF("${r}_${s}_dst_in_${reportType}").',+,'.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -828,7 +832,7 @@ sub io_report {
     }
 	
     # CDEFs for each protocol
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	foreach my $p ( @{$protocol{$r}} ) {
 	    if( $reportType eq 'bits' ) {
 		push @args, ('DEF:'.&cleanDEF("${r}_${p}_out_bytes").'='.$filename{$r}{$p}.':out_bytes:AVERAGE',
@@ -845,7 +849,7 @@ sub io_report {
     }
 
     # CDEFs for protocol by percentage
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	if( scalar @{$protocol{$r}} ) { 
 	    foreach my $p ( @{$protocol{$r}} ) {
 		push @args, 'CDEF:'.&cleanDEF("${r}_${p}_in_pct").'='.&cleanDEF("${r}_${p}_in_${reportType}").','.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -870,7 +874,7 @@ sub io_report {
     }
 
     # CDEFs for each TOS
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	foreach my $t ( @{$tos{$r}} ) {
 	    if( $reportType eq 'bits' ) {
 		push @args, ('DEF:'.&cleanDEF("${r}_${t}_out_bytes").'='.$filename{$r}{$t}.':out_bytes:AVERAGE',
@@ -887,7 +891,7 @@ sub io_report {
     }
 
     # CDEFs for TOS by percentage
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	if( scalar @{$tos{$r}} ) { 
 	    foreach my $t ( @{$tos{$r}} ) {
 		push @args, 'CDEF:'.&cleanDEF("${r}_${t}_in_pct").'='.&cleanDEF("${r}_${t}_in_${reportType}").','.&cleanDEF("${r}_total_in_${reportType}").',/,100,*';
@@ -953,7 +957,7 @@ sub io_report {
     # Graph commands
     my $count;
 	
-    foreach my $r (@router) {
+    foreach my $r (@router,@subnet) {
 	$count = 0;
 
 	# router name
