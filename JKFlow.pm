@@ -165,6 +165,18 @@ sub parseConfig {
 				print "Routergroup: $routergroup\n";
 				foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
 					print "Exporter: ".$exporter->{exporter}.", ";
+					if (defined $exporter->{interfaces}) {
+						print "interfaces: ";
+						foreach my $interface (split(/,/,$exporter->{interfaces})) {
+							print "interface ".$interface.",";
+							my $list=[];
+							if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface}{routergroups}) {
+								push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface}{routergroups}};
+							}
+							push @{$list},$routergroup;
+							$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface}{routergroups}=$list;
+						}
+					}
 					if (defined $exporter->{interface}) {
 						print "interface: ".$exporter->{interface};
 						my $list=[];
@@ -173,7 +185,49 @@ sub parseConfig {
 						}
 						push @{$list},$routergroup;
 						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface}}{routergroups}=$list;
-					} 
+					}
+					if (defined $exporter->{interfaces_out}) {
+						print "interfaces: ";
+						foreach my $interface_out (split(/,/,$exporter->{interfaces_out})) {
+							print "interface ".$interface_out.",";
+							my $list=[];
+							if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_out}{routergroups}) {
+								push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_out}{routergroups}};
+							}
+							push @{$list},$routergroup;
+							$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_out}{routergroups}=$list;
+						}
+					}
+					if (defined $exporter->{interface_out}) {
+						print "interface: ".$exporter->{interface_out};
+						my $list=[];
+						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_out}}{routergroups}) {
+							push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_out}}{routergroups}};
+						}
+						push @{$list},$routergroup;
+						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_out}}{routergroups}=$list;
+					}
+					if (defined $exporter->{interfaces_in}) {
+						print "interfaces: ";
+						foreach my $interface_in (split(/,/,$exporter->{interfaces_in})) {
+							print "interface ".$interface_in.",";
+							my $list=[];
+							if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_in}{routergroups}) {
+								push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_in}{routergroups}};
+							}
+							push @{$list},$routergroup;
+							$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$interface_in}{routergroups}=$list;
+						}
+					}
+					if (defined $exporter->{interface_in}) {
+						print "interface: ".$exporter->{interface_in};
+						my $list=[];
+						if (defined $JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_in}}{routergroups}) {
+							push @{$list},@{$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_in}}{routergroups}};
+						}
+						push @{$list},$routergroup;
+						$JKFlow::mylist{routers}{router}{$exporter->{exporter}}{$exporter->{interface_in}}{routergroups}=$list;
+					}
 					if (defined $exporter->{localsubnets}) {
 						print "localsubnets: ".$exporter->{localsubnets};
 						my $list=[];
@@ -280,6 +334,7 @@ my $ref=shift;
 					if (!defined $ref->{scoreboard}{hosts}) { $ref->{scoreboard}{hosts}={}; }
 					push @{$ref->{scoreboard}{aggregate}{hosts}{report}},
 					{	'count' => $report->{count},
+						'offset' => (defined $report->{offset} ? $report->{offset} : 0),
 						'filenamebase' => $report->{hostsbase},
 						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
 						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
@@ -288,6 +343,7 @@ my $ref=shift;
 					if (!defined $ref->{scoreboard}{ports}) { $ref->{scoreboard}{ports}={}; }
 					push @{$ref->{scoreboard}{aggregate}{ports}{report}},
 					{	'count' => $report->{count},
+						'offset' => (defined $report->{offset} ? $report->{offset} : 0),
 						'filenamebase' => $report->{portsbase},
 						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
 						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
@@ -484,7 +540,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{"from"}) {
+		if (defined $refxml->{$direction}{from}) {
 			if (!defined $ref->{$direction}{'fromsubnets'}) {
 				${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
@@ -509,7 +565,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{"nofrom"}) {
+		if (defined $refxml->{$direction}{nofrom}) {
 			if (!defined $ref->{$direction}{'fromsubnets'}) {
 				${$ref->{$direction}{'fromsubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
@@ -534,7 +590,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{"to"}) {
+		if (defined $refxml->{$direction}{to}) {
 			if (!defined $ref->{$direction}{'tosubnets'}) {
 				${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
@@ -559,7 +615,7 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{"noto"}) {
+		if (defined $refxml->{$direction}{noto}) {
 			if (!defined $ref->{$direction}{'tosubnets'}) {
 				${$ref->{$direction}{'tosubnets'}}=new Net::Patricia || die "Could not create a trie ($!)\n";
 			}
@@ -615,31 +671,245 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			}
 		}
 
-		if (defined $refxml->{$direction}{"routergroup"}) {
-			my $routergroup=$refxml->{$direction}{"routergroup"};
+		if (defined $refxml->{$direction}{'routergroup'} && defined $refxml->{$direction}{'fromas'} && defined $refxml->{$direction}{'toas'}) {
+		
+			foreach my $fromas (split(/,/,$refxml->{$direction}{'fromas'})) {
+				foreach my $toas (split(/,/,$refxml->{$direction}{'toas'})) {
+					print "Adding fromAS $fromas toAS $toas to Direction ".$direction."\n";
+					$ref->{$direction}{"$fromas:$toas"}={};
+				}
+			}
+
+			my $routergroup=$refxml->{$direction}{'routergroup'};
 			print "Direction routergroup=".$routergroup."\n";
 			foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
-				print "Exporter: ".$exporter->{exporter}.", ";
+				print "Exporter: ".$exporter->{exporter}.", \n";
 				if (!defined $ref->{$direction}{router}{$exporter->{exporter}}) {
 					$ref->{$direction}{router}{$exporter->{exporter}}={};
 				}
-				if (defined $exporter->{interface}) {
-					print "interface: ".$exporter->{interface};
-					$ref->{$direction}{router}{$exporter->{exporter}}{$exporter->{interface}}={};
+				if ((defined $exporter->{interface_in}) || (defined $exporter->{interfaces_in}) || (defined $exporter->{interface_out}) || (defined $exporter->{interfaces_out})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_interfacesinout_withas) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+						$ref->{$direction}{countfunction} = \&countFunction_interfacesinout_withas;
+						$ref->{$direction}{countfunctionname} = "countFunction_interfacesinout_withas";
+					}
+					if (defined $exporter->{interface_in}) {
+						print "interface_in: ".$exporter->{interface_in};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface_in}{$exporter->{interface_in}}={};
+					}
+					if (defined $exporter->{interfaces_in}) {
+						print "interfaces_in: ";
+						foreach my $interface_in (split(/,/,$exporter->{interfaces_in})) {
+							print "+ interface $interface_in ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface_in}{$interface_in}={};
+						}
+					}
+					if (defined $exporter->{interface_out}) {
+						print "interface_out: ".$exporter->{interface_out};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface_out}{$exporter->{interface_out}}={};
+					}
+					if (defined $exporter->{interfaces_out}) {
+						print "interfaces_out: ";
+						foreach my $interface_out (split(/,/,$exporter->{interfaces_out})) {
+							print "+ interface $interface_out ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface_out}{$interface_out}={};
+						}
+					}	
 				}
-				if (defined $exporter->{localsubnets}) {
+				if ((defined $exporter->{interface}) || (defined $exporter->{interfaces})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_interfaces_withas) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+							$ref->{$direction}{countfunction} = \&countFunction_interfaces_withas;
+							$ref->{$direction}{countfunctionname} = "countFunction_interfaces_withas";
+					}
+					if (defined $exporter->{interface}) {
+						print "interface: ".$exporter->{interface};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface}{$exporter->{interface}}={};
+					}
+					if (defined $exporter->{interfaces}) {
+						print "interfaces: ";
+						foreach my $interface (split(/,/,$exporter->{interfaces})) {
+							print "+ interface $interface ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface}{$interface}={};
+						}
+					}
+				}
+				if ((defined $exporter->{localsubnet}) || (defined $exporter->{localsubnets})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_localsubnets_withas) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+						$ref->{$direction}{countfunction} = \&countFunction_localsubnets_withas;
+						$ref->{$direction}{countfunctionname} = "countFunction_localsubnets_withas";
+					}
 					$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
-					print "localsubnets: ";
-					foreach my $subnet (split(/,/,$exporter->{localsubnets})) {
-						print "+ subnet $subnet ";
-						$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($subnet);
+					if (defined $exporter->{localsubnet}) {
+						print "localsubnet: ".$exporter->{localsubnet};
+						$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($exporter->{localsubnet});
+					}
+					if (defined $exporter->{localsubnets}) {
+						print "localsubnets: ";
+						foreach my $subnet (split(/,/,$exporter->{localsubnets})) {
+							print "+ subnet $subnet ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($subnet);
+						}
 					}
 				}
 				print "\n";
 			}
-			$ref->{$direction}{countfunction}=\&countFunction2;
+		} elsif (defined $refxml->{$direction}{'routergroup'}) {
+			my $routergroup=$refxml->{$direction}{'routergroup'};
+			print "Direction routergroup=".$routergroup."\n";
+			foreach my $exporter (@{$config->{routergroups}{routergroup}{$routergroup}{router}}) {
+				print "Exporter: ".$exporter->{exporter}.", \n";
+				if (!defined $ref->{$direction}{router}{$exporter->{exporter}}) {
+					$ref->{$direction}{router}{$exporter->{exporter}}={};
+				}
+				if ((defined $exporter->{interface_in}) || (defined $exporter->{interfaces_in}) || (defined $exporter->{interface_out}) || (defined $exporter->{interfaces_out})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_interfacesinout) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+						$ref->{$direction}{countfunction} = \&countFunction_interfacesinout;
+						$ref->{$direction}{countfunctionname} = "countFunction_interfacesinout";
+					}
+					if (defined $exporter->{interface_in}) {
+						print "interface_in: ".$exporter->{interface_in};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface_in}{$exporter->{interface_in}}={};
+					}
+					if (defined $exporter->{interfaces_in}) {
+						print "interfaces_in: ";
+						foreach my $interface_in (split(/,/,$exporter->{interfaces_in})) {
+							print "+ interface $interface_in ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface_in}{$interface_in}={};
+						}
+					}
+					if (defined $exporter->{interface_out}) {
+						print "interface_out: ".$exporter->{interface_out};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface_out}{$exporter->{interface_out}}={};
+					}
+					if (defined $exporter->{interfaces_out}) {
+						print "interfaces_out: ";
+						foreach my $interface_out (split(/,/,$exporter->{interfaces_out})) {
+							print "+ interface $interface_out ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface_out}{$interface_out}={};
+						}
+					}	
+				}
+				if ((defined $exporter->{interface}) || (defined $exporter->{interfaces})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_interfaces) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+							$ref->{$direction}{countfunction} = \&countFunction_interfaces;
+							$ref->{$direction}{countfunctionname} = "countFunction_interfaces";
+					}
+					if (defined $exporter->{interface}) {
+						print "interface: ".$exporter->{interface};
+						$ref->{$direction}{router}{$exporter->{exporter}}{interface}{$exporter->{interface}}={};
+					}
+					if (defined $exporter->{interfaces}) {
+						print "interfaces: ";
+						foreach my $interface (split(/,/,$exporter->{interfaces})) {
+							print "+ interface $interface ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{interface}{$interface}={};
+						}
+					}
+				}
+				if ((defined $exporter->{localsubnet}) || (defined $exporter->{localsubnets})) {
+					if (defined $ref->{$direction}{countfunction}) {
+						if ($ref->{$direction}{countfunction} != \&countFunction_localsubnets) {
+							warn "ERROR incorrect defined routergroup! Aborting";
+							exit(1);
+						}
+					} else {
+						$ref->{$direction}{countfunction} = \&countFunction_localsubnets;
+						$ref->{$direction}{countfunctionname} = "countFunction_localsubnets";
+					}
+					$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+					if (defined $exporter->{localsubnet}) {
+						print "localsubnet: ".$exporter->{localsubnet};
+						$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($exporter->{localsubnet});
+					}
+					if (defined $exporter->{localsubnets}) {
+						print "localsubnets: ";
+						foreach my $subnet (split(/,/,$exporter->{localsubnets})) {
+							print "+ subnet $subnet ";
+							$ref->{$direction}{router}{$exporter->{exporter}}{localsubnets}->add_string($subnet);
+						}
+					}
+				}
+				print "\n";
+			}			
+		} elsif ( 	defined $refxml->{$direction}{'fromas'} && 
+				defined $refxml->{$direction}{'toas'} && 
+				!defined $refxml->{$direction}{'routergroup'} &&
+				!defined $refxml->{$direction}{'fromsubnets'} &&
+				!defined $refxml->{$direction}{'tosubnets'} &&
+				!defined $refxml->{$direction}{'nofromsubnets'} &&
+				!defined $refxml->{$direction}{'notosubnets'} &&
+				!defined $refxml->{$direction}{'from'} &&
+				!defined $refxml->{$direction}{'to'} &&
+				!defined $refxml->{$direction}{'nofrom'} &&
+				!defined $refxml->{$direction}{'noto'}) {
+		
+			## Directions with fromas and toas attributes and no from/to subnet/site attributes
+			## No fromas and toas filtering needed, because wanted will select the directions from
+			## $JKFlow::mylist{'as'}{"$src_as:$dst_as"}. Also don't add if routergroup attributes are
+			## defined.  
+			
+			foreach my $fromas (split(/,/,$refxml->{$direction}{'fromas'})) {
+				foreach my $toas (split(/,/,$refxml->{$direction}{'toas'})) {
+					my $list=[];
+					if (defined $JKFlow::mylist{'as'}{"$fromas:$toas"}) {
+						push @{$list}, @{$JKFlow::mylist{'as'}{"$fromas:$toas"}};
+					}
+					print "Adding fromAS $fromas toAS $toas to Direction ".$direction."\n";
+					push @{$list},$ref->{$direction};
+					$JKFlow::mylist{'as'}{"$fromas:$toas"}=$list;
+				}
+			}
+			
+			$ref->{$direction}{countfunction} = \&countFunction_pure;
+			$ref->{$direction}{countfunctionname} = "countFunction_pure"; 
+			
+		} elsif ( 	defined $refxml->{$direction}{'fromas'} && 
+				defined $refxml->{$direction}{'toas'}) {
+
+			## Directions with fromas and toas attributes and from/to subnet/site attributes
+			## fromas and toas filtering is done in countFunction_withas
+			
+			foreach my $fromas (split(/,/,$refxml->{$direction}{'fromas'})) {
+				foreach my $toas (split(/,/,$refxml->{$direction}{'toas'})) {
+					print "Adding fromAS $fromas toAS $toas to Direction ".$direction."\n";
+					$ref->{$direction}{"$fromas:$toas"}={};
+				}
+			}
+				
+			$ref->{$direction}{countfunction} = \&countFunction_withas;
+			$ref->{$direction}{countfunctionname} = "countFunction_withas";
+		
 		} else {
-			$ref->{$direction}{countfunction}=\&countFunction1;
+		
+			## Directions without fromas and toas attributes
+			## Standard countFunction for directions with from/to subnets/sites attributes 
+			
+			$ref->{$direction}{countfunction} = \&countFunction_pure;
+			$ref->{$direction}{countfunctionname} = "countFunction_pure";
 		}
 
 		# This may have some explanation... Why don't push references of directions into $JKFlow::mylist{routergroup}
@@ -667,7 +937,9 @@ my ($srv,$proto,$start,$end,$tmp,$i);
 			push @{$list},$ref->{$direction};
 			$JKFlow::mylist{routergroup}{$routergroup}=$list;
 		}
-
+		
+		print "Assigning countfunction ".$ref->{$direction}{countfunctionname}." to direction ".$direction."\n";
+		
 		parseDirection (\%{$refxml->{$direction}}, \%{$ref->{$direction}});
 		generateCountPackets(\%{$ref->{$direction}});
 		
@@ -758,19 +1030,19 @@ EOF
 	if (defined $JKFlow::mylist{routers}{router}{$exporterip}) {
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$output_if}) {
 			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$output_if}{routergroups}}) {
-				#use Data::Dumper;
-				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
+				#print "Matched routergroup: ".$routergroup."\n";
 				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					&{$ref->{countpackets}}(\%{$ref},'out');
+					&{$ref->{countfunction}}(\%{$ref},'out');
+					#print "countFunction:".$ref->{countfunctionname}."\n";	
 				}
 			}
 		}
 		if (defined $JKFlow::mylist{routers}{router}{$exporterip}{$input_if}) {
 			foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{$input_if}{routergroups}}) {
-				#use Data::Dumper;
-				#print Dumper(%{$JKFlow::mylist{routergroup}{$routergroup}})."\n";
+				#print "Matched routergroup: ".$routergroup."\n";
 				foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					&{$ref->{countpackets}}(\%{$ref},'in');
+					&{$ref->{countfunction}}(\%{$ref},'in');
+					#print "countFunction:".$ref->{countfunctionname}."\n";
 				}
 			}
 		}
@@ -779,7 +1051,8 @@ EOF
 			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
 				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
 					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					&{$ref->{countpackets}}(\%{$ref},'in');
+						&{$ref->{countfunction}}(\%{$ref},'in');
+						#print "countFunction:".$ref->{countfunctionname}."\n";
 					}
 				}
 			}
@@ -787,7 +1060,8 @@ EOF
 			   !$JKFlow::mylist{routers}{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
 				foreach my $routergroup ( @{$JKFlow::mylist{routers}{router}{$exporterip}{routergroups}}) {
 					foreach my $ref (@{$JKFlow::mylist{routergroup}{$routergroup}}) {
-					&{$ref->{countpackets}}(\%{$ref},'out');
+						&{$ref->{countfunction}}(\%{$ref},'out');
+						#print "countFunction:".$ref->{countfunctionname}."\n";
 					}
 				}
 			}
@@ -796,39 +1070,177 @@ EOF
 
 EOF
 	}
+
+	if (defined $JKFlow::mylist{'as'}) {
+	$createwanted.= <<'EOF';
+	if (defined $JKFlow::mylist{'as'}{"$src_as:$dst_as"}) {
+		foreach my $ref (@{$JKFlow::mylist{'as'}{"$src_as:$dst_as"}}) {
+			&{$ref->{countfunction}}(\%{$ref},'out');
+			#print "SRC_AS=".$src_as." DST_AS=".$dst_as." countFunction:".$ref->{countfunctionname}."\n";
+		}
+	}
+
+	if (defined $JKFlow::mylist{'as'}{"$dst_as:$src_as"}) {
+		foreach my $ref (@{$JKFlow::mylist{'as'}{"$dst_as:$src_as"}}) {
+			&{$ref->{countfunction}}(\%{$ref},'in');
+			#print "DST_AS=".$dst_as." SRC_AS=".$src_as." countFunction:".$ref->{countfunctionname}."\n";
+		}
+	}
+	
+EOF
+	}
+	
 	$createwanted.= <<'EOF';
 	countDirections();
 	return 1;
 }
 EOF
 	eval $createwanted;
+	#print $createwanted."\n";
+	print "Wanted function created\n";
 }
 
-sub countFunction1($direction,$which) {
+# Countfunction for directions without routergroups
+
+sub countFunction_pure($direction,$which) {
 	my $direction=shift;
 	my $which=shift;
+	#print "IP=". $exporterip. " interface=".$input_if.",".$output_if."\n";
 	&{$direction->{countpackets}}(\%{$direction},$which);
 }
 
-sub countFunction2($direction,$which) {
+# Countfunction for directions without routergroups with AS
+
+sub countFunction_withas($direction,$which) {
 	my $direction=shift;
 	my $which=shift;
-	if (	defined $direction->{router}{$exporterip} &&
-		defined $direction->{router}{$exporterip}{$input_if}) {
-			&{$direction->{countpackets}}(\%{$direction},'in');
+	#print "IP=". $exporterip. " interface=".$input_if.",".$output_if."\n";
+	if (defined $direction->{'as'}{"$src_as:$dst_as"}) {
+		&{$direction->{countpackets}}(\%{$direction},'out');
 	}
-	if (	defined $direction->{router}{$exporterip} &&
-		defined $direction->{router}{$exporterip}{$output_if}) {
-			&{$direction->{countpackets}}(\%{$direction},'out');
+	if (defined $direction->{'as'}{"$dst_as:$src_as"}) {
+		&{$direction->{countpackets}}(\%{$direction},'in');
 	}
-	if (	defined $direction->{router}{$exporterip}{localsubnets}) {
+}
+
+# Countfunction for directions with routergroups with only interfaces_in or interfaces_out defined
+
+sub countFunction_interfacesinout($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (	defined $direction->{router}{$exporterip}) {
+		if ( defined $direction->{router}{$exporterip}{interface_out} ) {
+			if  (defined $direction->{router}{$exporterip}{interface_out}{$input_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'in');
+			}
+			if (defined $direction->{router}{$exporterip}{interface_out}{$output_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'out');
+			}
+		}
+		if ( defined $direction->{router}{$exporterip}{interface_in} ) {
+			if  (defined $direction->{router}{$exporterip}{interface_in}{$input_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'out');
+			}
+			if (defined $direction->{router}{$exporterip}{interface_in}{$output_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'in');
+			}
+		}
+	}
+}
+
+# Countfunction for directions with routergroups with interfaces_in/interfaces_out and AS defined
+
+sub countFunction_interfacesinout_withas($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (	defined $direction->{router}{$exporterip} && (defined $direction->{'as'}{"$src_as:$dst_as"} || defined $direction->{'as'}{"$dst_as:$src_as"}) ) {
+		if ( defined $direction->{router}{$exporterip}{interface_out} ) {
+			if  (defined $direction->{router}{$exporterip}{interface_out}{$input_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'in');
+			}
+			if (defined $direction->{router}{$exporterip}{interface_out}{$output_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'out');
+			}
+		}
+		if ( defined $direction->{router}{$exporterip}{interface_in} ) {
+			if  (defined $direction->{router}{$exporterip}{interface_in}{$input_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'out');
+			}
+			if (defined $direction->{router}{$exporterip}{interface_in}{$output_if}) {
+				&{$direction->{countpackets}}(\%{$direction},'in');
+			}
+		}
+	}
+}
+
+# Countfunction for directions with routergroups with interfaces defined
+
+sub countFunction_interfaces($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (	defined $direction->{router}{$exporterip}) {
+		if ( defined $direction->{router}{$exporterip}{interface}{$input_if} ||
+		     defined $direction->{router}{$exporterip}{interface}{$output_if} ) {
+			&{$direction->{countpackets}}(\%{$direction},$which);
+		}
+	}
+}
+
+# Countfunction for directions with routergroups with interfaces and AS defined
+
+sub countFunction_interfaces_withas($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (defined $direction->{'as'}{"$src_as:$dst_as"}) {
+		if (	defined $direction->{router}{$exporterip}) {
+			if ( defined $direction->{router}{$exporterip}{interface}{$input_if} ||
+			     defined $direction->{router}{$exporterip}{interface}{$output_if} ) {
+				&{$direction->{countpackets}}(\%{$direction},'out');
+			}
+		}
+	}
+	if (defined $direction->{'as'}{"$dst_as:$src_as"}) {
+		if (	defined $direction->{router}{$exporterip}) {
+			if ( defined $direction->{router}{$exporterip}{interface}{$input_if} ||
+			     defined $direction->{router}{$exporterip}{interface}{$output_if} ) {
+				&{$direction->{countpackets}}(\%{$direction},'in');
+			}
+		}
+	}
+}
+
+# Countfunction for directions with routergroups with localsubnets defined
+
+sub countFunction_localsubnets($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (	defined $direction->{router}{$exporterip}) {
 		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
-		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
+		!$direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
 				&{$direction->{countpackets}}(\%{$direction},'in');
 		}
 		if ($direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr) &&
-		   !$direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
+		!$direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
 				&{$direction->{countpackets}}(\%{$direction},'out');
+		}
+	}
+}
+
+# Countfunction for directions with routergroups with localsubnets and AS defined
+
+sub countFunction_localsubnets_withas($direction,$which) {
+	my $direction=shift;
+	my $which=shift;
+	if (defined $direction->{'as'}{"$src_as:$dst_as"} || defined $direction->{'as'}{"$dst_as:$src_as"}) {
+		if (	defined $direction->{router}{$exporterip}) {
+			if ($direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr) &&
+			!$direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr)) {
+					&{$direction->{countpackets}}(\%{$direction},'in');	
+			}
+			if ($direction->{router}{$exporterip}{localsubnets}->match_integer($srcaddr) &&
+			!$direction->{router}{$exporterip}{localsubnets}->match_integer($dstaddr)) {
+					&{$direction->{countpackets}}(\%{$direction},'out');
+			}
 		}
 	}
 }
@@ -1080,6 +1492,11 @@ EOF
 	}
 	$countpackets.= "}";
 	$ref->{countpackets}=eval $countpackets;
+	if (!defined $ref->{countpackets}) { 
+		print "There was a problem with this autogenerated packet evaluation function:\n";
+		print $countpackets;
+		exit(1); 
+	}
 }
 
 sub countftp {
@@ -1529,14 +1946,15 @@ sub countAggdata($) {
 			} else {
 				my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime($report->{startperiod});  
 				$file=sprintf("%s-%4.4d-%2.2d-%2.2d-%2.2d:%2.2d:%2.2d.html",$report->{filenamebase},$year+1900,$mon+1,$mday,$hour,$min,$sec);
-				#print "Wrote Agg Score:". $JKFlow::SCOREDIR.$dir.$file ."\n";
+				#Still something wrong with counter...
+				#print "Wrote Agg Score:". $JKFlow::SCOREDIR.$dir.$file ." : ".$report->{counter}."\n";
 				if ($file !~ /^\/.*/) {
 					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $JKFlow::SCOREDIR.$dir."/".$file);
 				} else {
 					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $file);
 				}
 				$report->{counter}=0;
-				$report->{startperiod} = $filetime - ($filetime % ($report->{count} * $JKFlow::SAMPLETIME));
+				$report->{startperiod} = $filetime - (($filetime - $report->{offset}* $JKFlow::SAMPLETIME ) % ($report->{count} * $JKFlow::SAMPLETIME));
 				delete $report->{aggdata};
 			}
 		}
