@@ -129,7 +129,7 @@ sub parseConfig {
 	use XML::Simple;
 	$config=XMLin('/usr/local/bin/JKFlow.xml',
 		forcearray=>[	'router','routergroup','interface','subnet','site','network',
-				'direction','application','defineset','set','report']);
+				'direction','application','defineset','set','report','tuple']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
@@ -312,39 +312,31 @@ my $ref=shift;
 		$ref->{monitor}="yes";
 	}
 	if (defined $refxml->{scoreboard}) {
-		if (defined $refxml->{scoreboard}{hosts} && $refxml->{scoreboard}{hosts} =="1" && !defined $ref->{scoreboard}{hosts}) {
-			$ref->{scoreboard}{hosts}{all}={};
+		if (defined $refxml->{scoreboard}{every}) {
+			$ref->{scoreboard}{every}={};
+			if (defined $refxml->{scoreboard}{latest}) {
+				$ref->{scoreboard}{latest}=$refxml->{scoreboard}{latest};
+				print "Scorepage is $ref->{scoreboard}{latest}\n";
+			}
 		}
-		if (defined $refxml->{scoreboard}{ports} && $refxml->{scoreboard}{ports}=="1" && !defined $ref->{scoreboard}{ports}) {
-			$ref->{scoreboard}{ports}{all}={};
-		}
-		if (defined $refxml->{scoreboard}{latesthosts}) {
-			$ref->{scoreboard}{hosts}{all}={};
-			$ref->{scoreboard}{latest}{hosts}=$refxml->{scoreboard}{latesthosts};
-			print "Scorepage hosts is $ref->{scoreboard}{latest}{hosts}\n";
-		}
-		if (defined $refxml->{scoreboard}{latestports}) {
-			$ref->{scoreboard}{ports}{all}={};
-			$ref->{scoreboard}{latest}{ports}=$refxml->{scoreboard}{latestports};
-			print "Scorepage ports is $ref->{scoreboard}{latest}{ports}\n";
+		if (defined $refxml->{scoreboard}{tuples}) {
+			foreach my $tuple (@{$refxml->{scoreboard}{tuples}{tuple}}) {
+				my $tuplestring="["; my $comma="";
+				foreach my $proto (split(/,/,$tuple)) {
+					$tuplestring.=$comma."\$$proto";
+					$comma=",";
+				}
+				$ref->{scoreboard}{tuples}{$tuplestring."]"}={};
+			}
 		}
 		if (defined $refxml->{scoreboard}{report}) {
 			foreach my $report (@{$refxml->{scoreboard}{report}}) {
-				if (defined $report->{hostsbase}) {
-					if (!defined $ref->{scoreboard}{hosts}) { $ref->{scoreboard}{hosts}={}; }
-					push @{$ref->{scoreboard}{aggregate}{hosts}{report}},
+				if (defined $report->{base}) {
+					if (!defined $ref->{scoreboard}) { $ref->{scoreboard}={}; }
+					push @{$ref->{scoreboard}{aggregate}{report}},
 					{	'count' => $report->{count},
 						'offset' => (defined $report->{offset} ? $report->{offset} : 0),
-						'filenamebase' => $report->{hostsbase},
-						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
-						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
-				}
-				if (defined $report->{portsbase}) {
-					if (!defined $ref->{scoreboard}{ports}) { $ref->{scoreboard}{ports}={}; }
-					push @{$ref->{scoreboard}{aggregate}{ports}{report}},
-					{	'count' => $report->{count},
-						'offset' => (defined $report->{offset} ? $report->{offset} : 0),
-						'filenamebase' => $report->{portsbase},
+						'filenamebase' => $report->{base},
 						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
 						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
 				}
@@ -352,37 +344,30 @@ my $ref=shift;
 		}
 	}
 	if (defined $refxml->{scoreboardother}) {
-		if (defined $refxml->{scoreboardother}{hosts} && $refxml->{scoreboardother}{hosts} =="1" && !defined $ref->{scoreboardother}{hosts}) {
-			$ref->{scoreboardother}{hosts}{all}={};
+		if (defined $refxml->{scoreboardother}{every}) {
+			$ref->{scoreboardother}{every}={};
+			if (defined $refxml->{scoreboardother}{latest}) {
+				$ref->{scoreboardother}{latest}=$refxml->{scoreboardother}{latest};
+				print "Scorepage is $ref->{scoreboardother}{latest}\n";
+			}
 		}
-		if (defined $refxml->{scoreboardother}{ports} && $refxml->{scoreboardother}{ports}=="1" && !defined $ref->{scoreboardother}{ports}) {
-			$ref->{scoreboardother}{ports}{all}={};
-		}
-		if (defined $refxml->{scoreboardother}{hosts} && defined $refxml->{scoreboardother}{latesthosts}) {
-			$ref->{scoreboardother}{hosts}{all}={};
-			$ref->{scoreboardother}{latest}{hosts}=$refxml->{scoreboardother}{latesthosts};
-			print "Scorepage hosts is $ref->{scoreboardother}{latest}{hosts}\n";
-		}
-		if (defined $refxml->{scoreboardother}{ports} && defined $refxml->{scoreboardother}{latestports}) {
-			$ref->{scoreboardother}{ports}{all}={};
-			$ref->{scoreboardother}{latest}{ports}=$refxml->{scoreboardother}{latestports};
-			print "Scorepage ports is $ref->{scoreboardother}{latest}{ports}\n";
+		if (defined $refxml->{scoreboardother}{tuples}) {
+			foreach my $tuple (@{$refxml->{scoreboardother}{tuples}{tuple}}) {
+				my $tuplestring="[";my $comma="";
+				foreach my $proto (split(/,/,$tuple)) {
+					$tuplestring.=$comma."\$$proto";
+					$comma=",";
+				}
+				$ref->{scoreboardother}{tuples}{$tuplestring."]"}={};
+			}
 		}
 		if (defined $refxml->{scoreboardother}{report}) {
 			foreach my $report (@{$refxml->{scoreboardother}{report}}) {
-				if (defined $report->{hostsbase}) {
-					if (!defined $ref->{scoreboardother}{hosts}) { $ref->{scoreboardother}{hosts}={}; }
-					push @{$ref->{scoreboardother}{aggregate}{hosts}{report}},
+				if (defined $report->{base}) {
+					if (!defined $ref->{scoreboardother}) { $ref->{scoreboardother}={}; }
+					push @{$ref->{scoreboardother}{aggregate}{report}},
 					{	'count' => $report->{count},
-						'filenamebase' => $report->{hostsbase},
-						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
-						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
-				}
-				if (defined $report->{portsbase}) {
-					if (!defined $ref->{scoreboardother}{ports}) { $ref->{scoreboardother}{ports}={}; }
-					push @{$ref->{scoreboardother}{aggregate}{ports}{report}},
-					{	'count' => $report->{count},
-						'filenamebase' => $report->{portsbase},
+						'filenamebase' => $report->{base},
 						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
 						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
 				}
@@ -1003,6 +988,8 @@ sub createwanted {
 ';
 	if ((defined $JKFlow::mylist{'all'}) && (defined $JKFlow::mylist{'all'}{'localsubnets'})) {
 	$createwanted.= <<'EOF';
+	# Make both <all> and <direction name='other'> possible
+	my $backup_servicecounted=$servicecounted;
 	# Counting ALL
 	if ($JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr) &&
 	   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($dstaddr)) {
@@ -1012,14 +999,18 @@ sub createwanted {
 	   !$JKFlow::mylist{'all'}{'localsubnets'}->match_integer($srcaddr)) {
 		&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'in');
 	}
+	$servicecounted=$backup_servicecounted;
 	
 EOF
 	}
 
 	# Counting ALL, but with no localsubnets. Assume everything outbound
+	# Make both <all> and <direction name='other'> possible
+	my $backup_servicecounted=$servicecounted;
 	if ((defined $JKFlow::mylist{'all'}) && (!defined $JKFlow::mylist{'all'}{'localsubnets'})) {
 	$createwanted.= <<'EOF';
 	&{$JKFlow::mylist{'all'}{countpackets}}(\%{$JKFlow::mylist{'all'}},'out');
+	$servicecounted=$backup_servicecounted;
 
 EOF
 	}
@@ -1400,29 +1391,18 @@ EOF
 			$servicecounted=1;
 EOF
 	}
-	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{hosts}) {
+	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'}) {
 	$countpackets.= <<'EOF';
-			$refref=$ref->{'scoreboardother'}{hosts};
-			$refref->{'dst'}{'flows'}{$dstip}{$which} ++;
-			$refref->{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
-			$refref->{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
-			$refref->{'src'}{'flows'}{$srcip}{$which} ++;
-			$refref->{'src'}{'bytes'}{$srcip}{$which} += $bytes;
-			$refref->{'src'}{'pkts'}{$srcip}{$which} += $pkts;
-
-EOF
-	}
-
-	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{ports}) {
-	$countpackets.= <<'EOF';
-			$refref=$ref->{'scoreboardother'}{ports};
-			$refref->{'dst'}{'flows'}{$dstport}{$which} ++;
-			$refref->{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
-			$refref->{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
-			$refref->{'src'}{'flows'}{$srcport}{$which} ++;
-			$refref->{'src'}{'bytes'}{$srcport}{$which} += $bytes;
-			$refref->{'src'}{'pkts'}{$srcport}{$which} += $pkts;
-	
+			foreach my $tuple (keys %{$ref->{'scoreboardother'}{tuples}}) {
+				#print "Tuple:".$tuple."\n";
+				my $tuplevalues=eval($tuple);
+				my $tuplestring=join('-',@{$tuplevalues});
+				#print "TupleValues:$tuplestring\n";
+				$ref->{scoreboardother}{count}{"$tuplestring"}{flows}{$which} ++;
+				$ref->{scoreboardother}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
+				$ref->{scoreboardother}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
+				$ref->{scoreboardother}{tuple}{"$tuplestring"}="$tuple";
+			}
 EOF
 	}
 	if (defined $ref->{'service'}) {
@@ -1440,45 +1420,17 @@ EOF
 EOF
 	}
 
-	if (defined $ref->{'scoreboard'} && defined $ref->{'scoreboard'}{hosts}) {
+	if (defined $ref->{'scoreboard'}) {
 	$countpackets.= <<'EOF';
-	$ref->{'scoreboard'}{hosts}{'dst'}{'flows'}{$dstip}{$which} ++;
-	$ref->{'scoreboard'}{hosts}{'dst'}{'bytes'}{$dstip}{$which} += $bytes;
-	$ref->{'scoreboard'}{hosts}{'dst'}{'pkts'}{$dstip}{$which} += $pkts;
-	if (! defined $ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc} ) {
-		$ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}=$dstport;
-	} elsif ($ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}!=$dstport) {
-		$ref->{'scoreboard'}{hosts}{'dst'}{$dstip}{ipsrc}="*";
-	}
-	$ref->{'scoreboard'}{hosts}{'src'}{'flows'}{$srcip}{$which} ++;
-	$ref->{'scoreboard'}{hosts}{'src'}{'bytes'}{$srcip}{$which} += $bytes;
-	$ref->{'scoreboard'}{hosts}{'src'}{'pkts'}{$srcip}{$which} += $pkts;
-	if (! defined $ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc} ) {
-		$ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}=$srcport;
-	} elsif ($ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}!=$srcport) {
-		$ref->{'scoreboard'}{hosts}{'src'}{$srcip}{ipsrc}="*";
-	}
-
-EOF
-	}
-
-	if (defined $ref->{'scoreboard'} && defined $ref->{'scoreboard'}{ports}) {
-	$countpackets.= <<'EOF';
-	$ref->{'scoreboard'}{ports}{'dst'}{'flows'}{$dstport}{$which} ++;
-	$ref->{'scoreboard'}{ports}{'dst'}{'bytes'}{$dstport}{$which} += $bytes;
-	$ref->{'scoreboard'}{ports}{'dst'}{'pkts'}{$dstport}{$which} += $pkts;
-	if (! defined $ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc} ) {
-		$ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}=$dstip;
-	} elsif ($ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}!=$dstip) {
-		$ref->{'scoreboard'}{ports}{'dst'}{$dstport}{ipsrc}="*";
-	}
-	$ref->{'scoreboard'}{ports}{'src'}{'flows'}{$srcport}{$which} ++;
-	$ref->{'scoreboard'}{ports}{'src'}{'bytes'}{$srcport}{$which} += $bytes;
-	$ref->{'scoreboard'}{ports}{'src'}{'pkts'}{$srcport}{$which} += $pkts;
-	if (! defined $ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc} ) {
-		$ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}=$srcip;
-	} elsif ($ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}!=$srcip) {
-		$ref->{'scoreboard'}{ports}{'src'}{$srcport}{ipsrc}="*";
+	foreach my $tuple (keys %{$ref->{'scoreboard'}{tuples}}) {
+		#print "Tuple:".$tuple."\n";
+		my $tuplevalues=eval($tuple);
+		my $tuplestring=join('-',@{$tuplevalues});
+		#print "TupleValues:$tuplestring\n";
+		$ref->{scoreboard}{count}{"$tuplestring"}{flows}{$which} ++;
+		$ref->{scoreboard}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
+		$ref->{scoreboard}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
+		$ref->{scoreboard}{tuple}{"$tuplestring"}="$tuple";
 	}
 
 EOF
@@ -1505,7 +1457,7 @@ sub countftp {
 	if (	($srcport == 21) || ($dstport == 21) 
 		|| ($srcport == 20) || ($dstport == 20) 
 		|| (($srcport >= 1024) && ($dstport >= 1024))) {
-		if ( 	(($srcport >= 1024) && ($dstport >=1024))
+		if ( (($srcport >= 1024) && ($dstport >=1024))
 			|| ($srcport == 20) || ($dstport == 20)	) {
 			if ( defined $ref->{cache}{"$dstaddr:$srcaddr"} ) {
 				$ref->{'dst'}{$which}{'flows'}++;
@@ -1737,196 +1689,172 @@ sub scoreboard {
 	my $ref = shift;
 	my $samplerate = shift;
 
-	my($i,$file,$item,$hr);
+	my($i,$file,$tuplekey,$hr);
 	my (@values, @sorted);
-	my(%dnscache) = ();
-	my(%newaggdata) = ();
+	my $newaggdata = {};
 	my($table,$row);
 
-	
+
 	# Next, open the file, making any necessary directories
 	($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
 		localtime($self->{filetime});  
 
 	$mon++; $year += 1900;
-
-	foreach my $type ('hosts','ports') { 
-
-		next if (!defined $ref->{aggregate}{$type}{report} && !defined $ref->{$type});
+	
+	if (defined $ref->{every}) {
 		
-		if (defined $ref->{$type}{all}) {
+		$file=$JKFlow::SCOREDIR.$dir;
 
-			$file=$JKFlow::SCOREDIR.$dir."/".$type;
-			
-			if (! -d $file) {
-				mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-			}
-
-			$file=sprintf("%s%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR,$dir,$type,$year,$mon,$mday);
-
-			if (! -d $file) {
-				mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-			}
-
-			#$file = sprintf("%s/%2.2d",$file,$hour);
-			#if (! -d $file) {
-			#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-			#}
-
-			$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
-			open(HTML,">$file") || die "Could not write to $file ($!)\n";
-
-			# Now, print out our header stuff into the file
-			print HTML "<html>\n<body bgcolor=\"\#ffffff\">\n<center>\n\n";
-
+		if (! -d $file) {
+			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
 		}
-		
-		# Now, print out our 6 topN tables
-		my %columns = ('bytes' => 3, 'pkts' => 5, 'flows' => 7);
 
-		foreach my $srcdst ('src','dst') {
-			@values = ();
+		$file=sprintf("%s%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR,$dir,$type,$year,$mon,$mday);
 
-			foreach my $key ('bytes','pkts','flows') {
+		if (! -d $file) {
+			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+		}
 
-				foreach my $direction ('in', 'out') {
+		#$file = sprintf("%s/%2.2d",$file,$hour);
+		#if (! -d $file) {
+		#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
+		#}
 
-					@sorted = sort {$ref->{$type}{$srcdst}{$key}{$b}{$direction} <=> $ref->{$type}{$srcdst}{$key}{$a}{$direction}} (keys %{$ref->{$type}{$srcdst}{$key}});
-	    
-					$table = new HTML::Table;
-					
-					if (defined $ref->{$type}{all}) {
-					
-						# This part lifted totally from CampusIO.pm. Thanks, dave!
-						
-						die unless ref($table);
-						$table->setBorder(1);
-						$table->setCellSpacing(0);
-						$table->setCellPadding(3);
+		$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
+		open(HTML,">$file") || die "Could not write to $file ($!)\n";
+
+		# Now, print out our header stuff into the file
+		print HTML "<html>\n<body bgcolor=\"\#ffffff\">\n<center>\n\n";
+
+	}
 	
-						$table->setCaption("Top $JKFlow::scorekeep by " .
-							"<b>$key $srcdst $direction</b><br>\n" .
-							"for flow sample ending " .
-							scalar(localtime($self->{filetime})),
-							'TOP');
+	# Now, print out our 6 topN tables
+	my %columns = ('bytes' => 4, 'pkts' => 6, 'flows' => 8);
 
-						$row = 1;
-						$table->addRow('<b>rank</b>',
-							"<b>$srcdst Address</b>",
-							'<b>bits/sec in</b>',
-							'<b>bits/sec out</b>',
-							'<b>pkts/sec in</b>',
-							'<b>pkts/sec out</b>',
-							'<b>flows/sec in</b>',
-							'<b>flows/sec out</b>');
+	@values = ();
 
-						$table->setRowBGColor($row, '#FFFFCC'); # pale yellow
+	foreach my $direction ('in', 'out') {
 
-						# Highlight the current column (out is 1 off from in)
-						$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction),'#90ee90'); # light green
-						$row++;
-						
-					}
+		foreach my $key ('bytes','pkts','flows') {
 
-					# Get the in and out hr's for ease of use
-					my ($in, $out);
-	
-					for($i=0;$i < @sorted; $i++) {
-						last unless $i < $JKFlow::SCOREKEEP;
-						$item = $sorted[$i];
-	
-						if (!(defined($newaggdata{$type}{$item}))) { # Add this to aggdata 1x
-							$newaggdata{$type}{$item} = {
-								'bytesin'  => $ref->{$type}{$srcdst}{bytes}{$item}{in} * $samplerate,
-								'bytesout' => $ref->{$type}{$srcdst}{bytes}{$item}{out} * $samplerate,
-								'pktsin'   => $ref->{$type}{$srcdst}{pkts}{$item}{in} * $samplerate,
-								'pktsout'  => $ref->{$type}{$srcdst}{pkts}{$item}{out} * $samplerate,
-								'flowsin'  => $ref->{$type}{$srcdst}{flows}{$item}{in} * $samplerate,
-								'flowsout' => $ref->{$type}{$srcdst}{flows}{$item}{out} * $samplerate,
-								'ipsrc' => $ref->{$type}{$srcdst}{$item}{ipsrc}
-							};
-						}
+			my @sorted = sort {$ref->{count}{$b}{$key}{$direction} <=> $ref->{count}{$a}{$key}{$direction}} (keys %{$ref->{count}});
 
-						#if (!(defined($dnscache{$ip}))) { # No name here?
-						#if ($dnscache{$ip} = gethostbyaddr(pack("C4",split(/\./, $ip)),AF_INET)) {
-						#	if (1==0) {
-						#		$dnscache{$ip} .= "<br>$ip";
-						#	} else {
-						#		$dnscache{$ip} = $ip;
-						#	}
-						#}
+			$table = new HTML::Table;
 
-						if (defined $ref->{$type}{all}) {
-						
-							$table->addRow( sprintf("#%d",$i+1),
-							#$dnscache{$ip},      # IP Name/Address
-							$item,						
+			if (defined $ref->{every}) {
 
-							# Bits/sec in
-							scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{in}*8)/$JKFlow::SAMPLETIME),
+				die unless ref($table);
+				$table->setBorder(1);
+				$table->setCellSpacing(0);
+				$table->setCellPadding(3);
 
-							# Bits/sec out
-							scale("%.1f", ($ref->{$type}{$srcdst}{bytes}{$item}{out}*8)/$JKFlow::SAMPLETIME),
+				$table->setCaption("Top $JKFlow::scorekeep by " .
+					"<b>$key $direction</b><br>\n" .
+					"for flow sample ending " .
+					scalar(localtime($self->{filetime})),
+					'TOP');
+
+				$row = 1;
+				$table->addRow('<b>rank</b>',
+					'<b>Tuple</b>',
+					'<b>Tuplekey</b>',
+					'<b>bits/sec in</b>',
+					'<b>bits/sec out</b>',
+					'<b>pkts/sec in</b>',
+					'<b>pkts/sec out</b>',
+					'<b>flows/sec in</b>',
+					'<b>flows/sec out</b>');
+
+				$table->setRowBGColor($row, '#FFFFCC'); # pale yellow
+
+				# Highlight the current column (out is 1 off from in)
+				$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction),'#90ee90'); # light green
+				$row++;
+
+			}
+
+			for($i=0;$i < @sorted; $i++) {
+				last unless $i < $JKFlow::SCOREKEEP;
+				my $tuplekey = $sorted[$i];
+				
+				if (!defined $newaggdata->{$tuplekey}) { # Add this to aggdata 1x
+					$newaggdata->{$tuplekey} = {
+						'tuple'    => $ref->{tuple}{$tuplekey},
+						'bytesin'  => $ref->{count}{$tuplekey}{bytes}{in} * $samplerate,
+						'bytesout' => $ref->{count}{$tuplekey}{bytes}{out} * $samplerate,
+						'pktsin'   => $ref->{count}{$tuplekey}{pkts}{in} * $samplerate,
+						'pktsout'  => $ref->{count}{$tuplekey}{pkts}{out} * $samplerate,
+						'flowsin'  => $ref->{count}{$tuplekey}{flows}{in} * $samplerate,
+						'flowsout' => $ref->{count}{$tuplekey}{flows}{out} * $samplerate
+					};
+				}
+
+				if (defined $ref->{every}) {
+
+					$table->addRow( sprintf("#%d",$i+1),
+					#$dnscache{$ip},      # IP Name/Address
+					$tuplekey,						
+
+					$ref->{tuple}{$tuplekey},
 					
-							# Pkts/sec in
-							scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{in}/$JKFlow::SAMPLETIME)),
+					# Bits/sec in
+					scale("%.1f", ($ref->{count}{$tuplekey}{bytes}{in}*8)/$JKFlow::SAMPLETIME),
 
-							# Pkts/sec out
-							scale("%.1f", ($ref->{$type}{$srcdst}{pkts}{$item}{out}/$JKFlow::SAMPLETIME)),
+					# Bits/sec out
+					scale("%.1f", ($ref->{count}{$tuplekey}{bytes}{out}*8)/$JKFlow::SAMPLETIME),
 
-							# Flows/sec in
-							scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{in}/$JKFlow::SAMPLETIME)),
+					# Pkts/sec in
+					scale("%.1f", ($ref->{count}{$tuplekey}{pkts}{in}/$JKFlow::SAMPLETIME)),
 
-							# Flows/sec out
-							scale("%.1f", ($ref->{$type}{$srcdst}{flows}{$item}{out}/$JKFlow::SAMPLETIME)) );
+					# Pkts/sec out
+					scale("%.1f", ($ref->{count}{$tuplekey}{pkts}{out}/$JKFlow::SAMPLETIME)),
 
-							$table->setRowAlign($row, 'RIGHT');
-							$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction), '#add8e6'); # light blue
-							$row++;
-						}
-					}
-				if (defined $ref->{$type}{all}) { print HTML "<p>\n$table</p>\n\n"; }
+					# Flows/sec in
+					scale("%.1f", ($ref->{count}{$tuplekey}{flows}{in}/$JKFlow::SAMPLETIME)),
+
+					# Flows/sec out
+					scale("%.1f", ($ref->{count}{$tuplekey}{flows}{out}/$JKFlow::SAMPLETIME)) );
+
+					$table->setRowAlign($row, 'RIGHT');
+					$table->setCellBGColor($row, $columns{$key} + ('out' eq $direction), '#add8e6'); # light blue
+					$row++;
 				}
 			}
+		if (defined $ref->{every}) { print HTML "<p>\n$table</p>\n\n"; }
 		}
+	}
+
 		
-		if (defined $ref->{$type}{all}) {
+	if (defined $ref->{every}) {
 		
-			# Print footers
-			print HTML "\n</center>\n</body>\n</html>\n";
+		# Print footers
+		print HTML "\n</center>\n</body>\n</html>\n";
 
-			# Close the file, and make $scorepage point at this page
-			close HTML;
+		# Close the file, and make $scorepage point at this page
+		close HTML;
+	}
 
+	# Update links
+	if (defined $ref->{latest}) {
+		if ($ref->{latest} !~ /^\/.*/) {
+			unlink $JKFlow::SCOREDIR.$dir."/".$ref->{latest} ||
+				warn "Could not remove ".$JKFlow::SCOREDIR.$dir.$ref->{latest}." ($!)\n";
+			symlink $file, $JKFlow::SCOREDIR.$dir."/".$ref->{latest} ||
+				warn "Could not create symlink to $JKFlow::SCOREDIR.$dir.$ref->{latest} ($!)\n";
+		} else {
+			unlink $ref->{latest} ||
+				warn "Could not remove ".$ref->{latest}." ($!)\n";
+			symlink $file, $ref->{latest} ||
+				warn "Could not create symlink to ".$ref->{latest}." ($!)\n";
 		}
-
-		# Update links
-		if (defined $ref->{latest}{$type}) {
-			if ($ref->{latest}{$type} !~ /^\/.*/) {
-				unlink $JKFlow::SCOREDIR.$dir."/".$ref->{latest}{$type} ||
-					warn "Could not remove ".$JKFlow::SCOREDIR.$dir.$ref->{latest}{$type}." ($!)\n";
-				symlink $file, $JKFlow::SCOREDIR.$dir."/".$ref->{latest}{$type} ||
-					warn "Could not create symlink to $JKFlow::SCOREDIR.$dir.$ref->{latest}{$type} ($!)\n";
-			} else {
-				unlink $ref->{latest}{$type} ||
-					warn "Could not remove ".$ref->{latest}{$type}." ($!)\n";
-				symlink $file, $ref->{latest}{$type} ||
-					warn "Could not create symlink to ".$ref->{latest}{$type}." ($!)\n";
-			}
-		}
-	
-		##### AGGDATA ######
-		&countAggdata($dir,$ref->{aggregate}{$type}{report},\%{$newaggdata{$type}},$self->{filetime});
 	}
 	
-	if (defined $ref->{hosts}) {
-		delete $ref->{hosts}{src};
-		delete $ref->{hosts}{dst};
-	}
-	if (defined $ref->{ports}) {
-		delete $ref->{ports}{src};
-		delete $ref->{ports}{dst};
-	}
+	##### AGGDATA ######
+	&countAggdata($dir,$ref->{aggregate}{report},\%{$newaggdata},$self->{filetime});
+
+	undef $ref->{count};
+	undef $ref->{tuple};
+	undef $newaggdata;
 	return;
 }
 
@@ -1949,9 +1877,9 @@ sub countAggdata($) {
 				#Still something wrong with counter...
 				#print "Wrote Agg Score:". $JKFlow::SCOREDIR.$dir.$file ." : ".$report->{counter}."\n";
 				if ($file !~ /^\/.*/) {
-					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $JKFlow::SCOREDIR.$dir."/".$file);
+					&writeAggScoreboard($report->{aggdata}{tuplevalues}, $report->{scorekeep}, $report->{counter}, $JKFlow::SCOREDIR.$dir."/".$file);
 				} else {
-					&writeAggScoreboard($report->{aggdata}, $report->{scorekeep}, $report->{counter}, $file);
+					&writeAggScoreboard($report->{aggdata}{tuplevalues}, $report->{scorekeep}, $report->{counter}, $file);
 				}
 				$report->{counter}=0;
 				$report->{startperiod} = $filetime - (($filetime - $report->{offset}* $JKFlow::SAMPLETIME ) % ($report->{count} * $JKFlow::SAMPLETIME));
@@ -1959,38 +1887,32 @@ sub countAggdata($) {
 			}
 		}
 		# Merge newaggdata and aggdata
-		foreach my $porthost (keys %{$newaggdata}) {
-			$report->{aggdata}{$porthost}{'count'}++;
-			$report->{aggdata}{$porthost}{'bytesin'}  += $newaggdata->{$porthost}{'bytesin'};
-			$report->{aggdata}{$porthost}{'bytesout'} += $newaggdata->{$porthost}{'bytesout'};
-			$report->{aggdata}{$porthost}{'pktsin'}   += $newaggdata->{$porthost}{'pktsin'};
-			$report->{aggdata}{$porthost}{'pktsout'}  += $newaggdata->{$porthost}{'pktsout'};
-			$report->{aggdata}{$porthost}{'flowsin'}  += $newaggdata->{$porthost}{'flowsin'};
-			$report->{aggdata}{$porthost}{'flowsout'} += $newaggdata->{$porthost}{'flowsout'};
-			if (!defined $report->{aggdata}{$porthost}{'ipsrc'}) {
-				$report->{aggdata}{$porthost}{'ipsrc'}=$newaggdata->{$porthost}{'ipsrc'};
-			} elsif ($report->{aggdata}{$porthost}{'ipsrc'}!=$newaggdata->{$porthost}{'ipsrc'}) {
-				$report->{aggdata}{$porthost}{'ipsrc'}='*';
-			}
-			#print "IPSRC".$report->{aggdata}{$porthost}{'ipsrc'}."\n";
+		foreach my $tuplekey (keys %{$newaggdata}) {
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'count'}++;
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'tuple'} =		$newaggdata->{$tuplekey}{'tuple'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'bytesin'} +=	$newaggdata->{$tuplekey}{'bytesin'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'bytesout'} +=	$newaggdata->{$tuplekey}{'bytesout'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'pktsin'} +=	$newaggdata->{$tuplekey}{'pktsin'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'pktsout'} +=	$newaggdata->{$tuplekey}{'pktsout'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsin'} +=	$newaggdata->{$tuplekey}{'flowsin'};
+			$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsout'} +=	$newaggdata->{$tuplekey}{'flowsout'};
 		}
 		# Increment counter
-		$report->{aggdata}{'numresults'}++;
-		if ($report->{aggdata}{'numresults'} > $report->{numkeep}) {
+		$report->{aggdata}{numresults}++;
+		if ($report->{aggdata}{numresults} > $report->{numkeep}) {
 			# Prune this shit
-			$report->{aggdata}{'numresults'} >>= 1;
-			foreach $porthost (keys %{$report->{aggdata}}) {
-				next if ($porthost =~ /numresults/);           # Skip this, not a ref
-				if ($report->{aggdata}{$porthost}{'count'} == 1) {     # Delete singletons
-					delete $report->{aggdata}{$porthost};
+			$report->{aggdata}{numresults} >>= 1;
+			foreach my $tuplekey (keys %{$report->{aggdata}{tuplevalues}{$tuplekey}}) {
+				if ($report->{aggdata}{tuplevalues}{$tuplekey}{'count'} == 1) {     # Delete singletons
+					delete $report->{aggdata}{tuplevalues}{$tuplekey};
 				} else {
-					$report->{aggdata}{$porthost}{'count'}    >>= 1;   # Divide by 2
-					$report->{aggdata}{$porthost}{'bytesin'}  >>= 1;
-					$report->{aggdata}{$porthost}{'bytesout'} >>= 1;
-					$report->{aggdata}{$porthost}{'pktsin'}   >>= 1;
-					$report->{aggdata}{$porthost}{'pktsout'}  >>= 1;
-					$report->{aggdata}{$porthost}{'flowsin'}  >>= 1;
-					$report->{aggdata}{$porthost}{'flowsout'} >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'count'}    >>= 1;   # Divide by 2
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'bytesin'}  >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'bytesout'} >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'pktsin'}   >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'pktsout'}  >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsin'}  >>= 1;
+					$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsout'} >>= 1;
 				}
 			}
 		}
@@ -2001,16 +1923,13 @@ sub countAggdata($) {
 # Function to print the pretty table of over-all winners
 sub writeAggScoreboard ()
 {
-    my %data = %{(shift)};
+    my $data = shift;
     my $scorekeep = shift;
     my $count = shift;
     my $file = shift;
     my($key, $i);
     my(@sorted);
     my(%dnscache);
-    my($tmp) = $data{'numresults'};
-
-    delete $data{'numresults'};
 
     open(OUT,">$file") ||
 	die "Cannot open $file for write ($!)\n";
@@ -2024,12 +1943,7 @@ sub writeAggScoreboard ()
 
     foreach my $dir ('in','out') {
 	foreach my $key ('bytes','pkts','flows') {
-	    @sorted = sort { ($data{$b}->{"$key$dir"} / 
-			      $data{$b}->{'count'})
-				 <=> 
-			     ($data{$a}->{"$key$dir"} /
-			      $data{$a}->{'count'}) }
-	    	(keys %data);
+	    @sorted = sort {($data->{$b}{"$key$dir"} / $data->{$b}{'count'}) <=> ($data->{$a}{"$key$dir"} / $data->{$a}{'count'}) } (keys %{$data});
 
 	    my $table = new 'HTML::Table';
 	    die unless ref($table);    
@@ -2046,8 +1960,8 @@ sub writeAggScoreboard ()
 
 	    my $row = 1;
 	    $table->addRow('<b>rank</b>',
-			   "<b>address</b>",
-			   "<b>address</b>",
+			   '<b>tuple</b>',
+			   '<b>tuplekey</b>',
 			   '<b>bits/sec in</b>',
 			   '<b>bits/sec out</b>',
 			   '<b>pkts/sec in</b>',
@@ -2062,47 +1976,32 @@ sub writeAggScoreboard ()
 	    $row++;	    
 	    for($i=0;$i < @sorted; $i++) {
 		last unless $i < $scorekeep;
-		my $ip = $sorted[$i];
+		my $tuplekey = $sorted[$i];
 
-#		if (!(defined($dnscache{$ip}))) { # No name here?
-#		    if ($dnscache{$ip} = gethostbyaddr(pack("C4", 
-#							split(/\./, $ip)),
-#						       AF_INET)) {
-#			$dnscache{$ip} . = "<br>$ip (" .
-#			    $data{$ip}->{'count'} . " samples)";
-#		    } else {
-#			$dnscache{$ip} = $ip . " (" .
-#			    $data{$ip}->{'count'} . " samples)";
-#		    }
-#		}
-
-		my $div = $JKFlow::SAMPLETIME * $data{$ip}->{'count'};
+		my $div = $JKFlow::SAMPLETIME * $data->{$tuplekey}{'count'};
 		$table->addRow( sprintf("#%d",$i+1),
 				# $dnscache{$ip},      
-				$ip,			# Host / Port address
+				$data->{$tuplekey}{'tuple'},
 				
-				$data{$ip}->{'ipsrc'},	# Port / Host address 
+				$tuplekey,
 				
 				# Bits/sec in
-				scale("%.1f", ($data{$ip}->{'bytesin'}*8) /
-				                $div),
+				scale("%.1f", ($data->{$tuplekey}{'bytesin'}*8)/$div),
 				
 				# Bits/sec out
-				scale("%.1f", ($data{$ip}->{'bytesout'}*8) /
-				                $div),
+				scale("%.1f", ($data->{$tuplekey}{'bytesout'}*8)/$div),
 
 				# Pkts/sec in
-				scale("%.1f", ($data{$ip}->{'pktsin'}/$div)),
+				scale("%.1f", ($data->{$tuplekey}{'pktsin'}/$div)),
 
 				# Pkts/sec out
-				scale("%.1f", ($data{$ip}->{'pktsout'}/$div)),
+				scale("%.1f", ($data->{$tuplekey}{'pktsout'}/$div)),
 				
 				# Flows/sec in
-				scale("%.1f", ($data{$ip}->{'flowsin'}/$div)),
+				scale("%.1f", ($data->{$tuplekey}{'flowsin'}/$div)),
 
 				# Flows/sec out
-				scale("%.1f",
-				      ($data{$ip}->{'flowsout'}/$div)));
+				scale("%.1f", ($data->{$tuplekey}{'flowsout'}/$div)));
 
 		
 		$table->setRowAlign($row, 'RIGHT');
@@ -2116,7 +2015,6 @@ sub writeAggScoreboard ()
     }
     
     close OUT;
-    $data{'numresults'} = $tmp;
 }
 
 # Simple percentifier, usage percent(1,10) returns 10
