@@ -103,6 +103,7 @@ my %definedcolors =	(
 			'tcp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
 			'udp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
 			'windows' => 		{src => 0x2020FF, dst => 0x6060FF }, # Blue
+			'netbios' => 		{src => 0x2020FF, dst => 0x6060FF }, # Blue
 			'dns' =>		{src => 0x993399, dst => 0xAA66AA }, # Purple
 			'tcp_telnet' =>		{src => 0x707070, dst => 0x909090 }, # Gray
 			'tcp_ssh' =>		{src => 0x707070, dst => 0x909090 }, # Gray
@@ -116,6 +117,27 @@ my %definedcolors =	(
 			'tcp_smtp' => 		{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
 			'tcp_nntp' =>		{src => 0xC09010, dst => 0xD0A040 }, # Brown
 			'other' => 		{src => 0xA0A0A0, dst => 0xA0A0A0 }, # Gray
+			'EF'   =>			{src => 0x993399 }, # Purple
+			'AF41' =>			{src => 0xFFFF10 }, # Yellow
+			'AF42' =>			{src => 0xFFFF40 }, # Yellow
+			'AF43' =>			{src => 0xFFFF70 }, # Yellow
+			'AF31' =>			{src => 0xFF0000 }, # Red
+			'AF32' =>			{src => 0xFF3030 }, # Red
+			'AF33' =>			{src => 0xFF6060 }, # Red
+			'AF21' =>			{src => 0x60FF60 }, # Green
+			'AF22' =>			{src => 0x90FF90 }, # Green
+			'AF23' =>			{src => 0xC0FFC0 }, # Green
+			'AF11' =>			{src => 0x2020FF }, # Blue
+			'AF12' =>			{src => 0x5050FF }, # Blue
+			'AF13' =>			{src => 0x8080FF }, # Blue
+			'CS1'  =>			{src => 0x2020FF }, # Blue
+			'CS2'  =>			{src => 0x60FF60 }, # Green
+			'CS3'  =>			{src => 0xFF0000 }, # Red
+			'CS4'  =>			{src => 0xFFFF10 }, # Yellow
+			'CS5'  =>			{src => 0xFFFF10 }, # Yellow
+			'CS6'  =>			{src => 0xFFFF10 }, # Yellow
+			'CS7'  =>			{src => 0xFFFF10 }, # Yellow
+			'BE'   =>			{src => 0xA0A0A0 }, # Gray
 			'total' => 		{src => 0x00000F } # Black
 );
 
@@ -247,13 +269,13 @@ sub showMenu {
 				-values => ['png', 'gif'],
 				-default => 'png' ) );
     
-	print $q->td( { -rowspan => '2' },
+	print $q->td( { -rowspan => '1' },
 		"Width:",
 		$q->textfield( 	-name => "width",
 				-default => $width,
 				-size => 7 ) );
     
-	print $q->td( { -rowspan => '2' },
+	print $q->td( { -rowspan => '1' },
 		"Height:",
 		$q->textfield( 	-name => "height",
 				-default => $height,
@@ -268,8 +290,12 @@ sub showMenu {
 	
 	print $q->td( { -rowspan => '1' },
 		"Predefined Colors: ",
-		$q->checkbox( -name => "predefinedcolors",-value => '1',-checked => 'on',-label => 'Yes' ));
+		$q->checkbox( -name => "predefinedcolors",-value => '1',-checked => 'on', label => '' ));
 
+	print $q->td( { -rowspan => '1' },
+		"Absolute: ",
+		$q->checkbox( -name => "absolute",-value => '1',-checked => 'off', label => '' ));
+		
 	print $q->end_Tr();
 	print $q->end_table();
 	print $q->center( $q->submit( -name => '',
@@ -586,9 +612,11 @@ sub subreport {
 	my $reportType = shift;
 	my ($str1,$str2);
 
-	# CDEFs for each protocol
-	$str1 = 'CDEF:'.&cleanDEF("${r}_other_protocol_in_pct").'=100';
-	$str2 = 'CDEF:'.&cleanDEF("${r}_other_protocol_out_pct").'=100';
+	if (!param('absolute')) {
+		# CDEFs for each protocol
+		$str1 = 'CDEF:'.&cleanDEF("${r}_other_protocol_in_pct").'=100';
+		$str2 = 'CDEF:'.&cleanDEF("${r}_other_protocol_out_pct").'=100';
+	}
 	foreach my $p (sort keys %{$ref->{'protocol'}} ) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
@@ -603,19 +631,26 @@ sub subreport {
 				'DEF:'.&cleanDEF("${r}_${p}_in_${reportType}").'='.&getFilename($r,'protocol_'.$p.'.rrd').":in_${reportType}:AVERAGE",
 				'CDEF:'.&cleanDEF("${r}_${p}_in_${reportType}_neg").'='.&cleanDEF("${r}_${p}_in_${reportType}").',-1,*');
 		}
-	push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_in_pct").'='.&cleanDEF("${r}_${p}_in_${reportType}").','.&cleanDEF("total_in_${reportType}").',/,100,*';
-	push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_out_pct").'='.&cleanDEF("${r}_${p}_out_${reportType}").','.&cleanDEF("total_out_${reportType}").',/,100,*';
-	$str1 .= ','.&cleanDEF("${r}_${p}_in_pct").',-';
-	$str2 .= ','.&cleanDEF("${r}_${p}_in_pct").',-';
+		if (param('absolute')) {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_in_pct").'='.&cleanDEF("${r}_${p}_in_${reportType}");
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_out_pct").'='.&cleanDEF("${r}_${p}_out_${reportType}");
+		} else {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_in_pct").'='.&cleanDEF("${r}_${p}_in_${reportType}").','.&cleanDEF("total_in_${reportType}").',/,100,*';
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${p}_out_pct").'='.&cleanDEF("${r}_${p}_out_${reportType}").','.&cleanDEF("total_out_${reportType}").',/,100,*';
+			$str1 .= ','.&cleanDEF("${r}_${p}_in_pct").',-';
+			$str2 .= ','.&cleanDEF("${r}_${p}_in_pct").',-';
+		}
 	}
-	if( scalar %{$ref->{'protocol'}} ) {
+	if( !param('absolute') && scalar %{$ref->{'protocol'}} ) {
 		push @{$argref}, $str1;
 		push @{$argref}, $str2;
 	}
 
 	# CDEFs for each service
-	$str1 = 'CDEF:'.&cleanDEF("${r}_other_service_in_pct").'=100';
-	$str2 = 'CDEF:'.&cleanDEF("${r}_other_service_out_pct").'=100';
+	if (!param('absolute')) {
+		$str1 = 'CDEF:'.&cleanDEF("${r}_other_service_in_pct").'=100';
+		$str2 = 'CDEF:'.&cleanDEF("${r}_other_service_out_pct").'=100';
+	}
 	foreach my $s (sort keys %{$ref->{'service'}}) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
@@ -638,19 +673,26 @@ sub subreport {
 				'DEF:'.&cleanDEF("${r}_${s}_dst_in_${reportType}").'='.&getFilename($r,'service_'.$s.'_dst.rrd').":in_${reportType}:AVERAGE",
 				'CDEF:'.&cleanDEF("${r}_${s}_dst_in_${reportType}_neg").'='.&cleanDEF("${r}_${s}_dst_in_${reportType}").',-1,*');
     		}
-		push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_in_pct").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").','.&cleanDEF("${r}_${s}_dst_in_${reportType}").',+,'.&cleanDEF("total_in_${reportType}").',/,100,*';
-		push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_out_pct").'='.&cleanDEF("${r}_${s}_src_out_${reportType}").','.&cleanDEF("${r}_${s}_dst_out_${reportType}").',+,'.&cleanDEF("total_out_${reportType}").',/,100,*';
-		$str1 .= ','.&cleanDEF("${r}_${s}_in_pct").',-';
-		$str2 .= ','.&cleanDEF("${r}_${s}_out_pct").',-';
+		if (param('absolute')) {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_in_pct").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").','.&cleanDEF("${r}_${s}_dst_in_${reportType}").',+,';
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_out_pct").'='.&cleanDEF("${r}_${s}_src_out_${reportType}").','.&cleanDEF("${r}_${s}_dst_out_${reportType}").',+,';
+		} else {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_in_pct").'='.&cleanDEF("${r}_${s}_src_in_${reportType}").','.&cleanDEF("${r}_${s}_dst_in_${reportType}").',+,'.&cleanDEF("total_in_${reportType}").',/,100,*';
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${s}_out_pct").'='.&cleanDEF("${r}_${s}_src_out_${reportType}").','.&cleanDEF("${r}_${s}_dst_out_${reportType}").',+,'.&cleanDEF("total_out_${reportType}").',/,100,*';
+			$str1 .= ','.&cleanDEF("${r}_${s}_in_pct").',-';
+			$str2 .= ','.&cleanDEF("${r}_${s}_out_pct").',-';
+		}
 	}
-	if( scalar  %{$ref->{'service'}} ) {
+	if( !param('absolute') && scalar  %{$ref->{'service'}} ) {
 		push @{$argref}, $str1;
 		push @{$argref}, $str2;
 	}
 
+	if (!param('absolute')) {
 	# CDEFs for each TOS
 	$str1 = 'CDEF:'.&cleanDEF("${r}_other_tos_in_pct").'=100';
 	$str2 = 'CDEF:'.&cleanDEF("${r}_other_tos_out_pct").'=100';
+	}
 	foreach my $t (sort keys  %{$ref->{'tos'}} ) {
 		if( $reportType eq 'bits' ) {
 			push @{$argref}, (
@@ -665,24 +707,28 @@ sub subreport {
 				'DEF:'.&cleanDEF("${r}_${t}_in_${reportType}").'='.&getFilename($r,'tos_'.$t.'.rrd').":in_${reportType}:AVERAGE",
 				'CDEF:'.&cleanDEF("${r}_${t}_in_${reportType}_neg").'='.&cleanDEF("${r}_${t}_in_${reportType}").',-1,*');
 		}
-   		push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_in_pct").'='.&cleanDEF("${r}_${t}_in_${reportType}").','.&cleanDEF("total_in_${reportType}").',/,100,*';
-		push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_out_pct").'='.&cleanDEF("${r}_${t}_out_${reportType}").','.&cleanDEF("total_out_${reportType}").',/,100,*';
-		$str1 .= ','.&cleanDEF("${r}_${t}_in_pct").',-';
-		$str2 .= ','.&cleanDEF("${r}_${t}_out_pct").',-';
+		if (param('absolute')) {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_in_pct").'='.&cleanDEF("${r}_${t}_in_${reportType}");
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_out_pct").'='.&cleanDEF("${r}_${t}_out_${reportType}");
+		} else {
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_in_pct").'='.&cleanDEF("${r}_${t}_in_${reportType}").','.&cleanDEF("total_in_${reportType}").',/,100,*';
+			push @{$argref}, 'CDEF:'.&cleanDEF("${r}_${t}_out_pct").'='.&cleanDEF("${r}_${t}_out_${reportType}").','.&cleanDEF("total_out_${reportType}").',/,100,*';
+			$str1 .= ','.&cleanDEF("${r}_${t}_in_pct").',-';
+			$str2 .= ','.&cleanDEF("${r}_${t}_out_pct").',-';
+		}
 	}
-	if( scalar  %{$ref->{'tos'}} ) {
+	if(!param('absolute') && scalar  %{$ref->{'tos'}} ) {
 		push @{$argref}, $str1;
 		push @{$argref}, $str2;
 	}
-#	}
 }
 
 sub plotreport {
 
 	my $argsref = shift;
 	my $ref = shift;
-        my $basename = shift;
-        my $reportType = shift;
+	my $basename = shift;
+	my $reportType = shift;
 	my $countref = shift;
 	my ($neg,$string);
 
@@ -703,10 +749,15 @@ sub plotreport {
 			} else {
 				$string = 'LINE1:'.&cleanDEF($basename.'_'.$p.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$p,'src');
 			}
-      			if ($direction eq 'in') {
+      		if ($direction eq 'in') {
 				push @{$argsref->{protocol}{in}}, $string.':'.cleanProtocolLabel($basename, $p);
-				push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_out_pct").':AVERAGE:%.1lf%% Out';
-				push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_in_pct").':AVERAGE:%.1lf%% In\n';
+				if (param('absolute')) {
+					push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_out_pct").':AVERAGE:%.1lf Out';
+					push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_in_pct").':AVERAGE:%.1lf In\n';
+				} else {
+					push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_out_pct").':AVERAGE:%.1lf%% Out';
+					push @{$argsref->{protocol}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${p}_in_pct").':AVERAGE:%.1lf%% In\n';
+				}
 			} else {
 				push @{$argsref->{protocol}{out}}, $string;
 			}
@@ -739,9 +790,14 @@ sub plotreport {
 					push @{$argsref->{service}{out}}, $string;
 				}
 			}
-      			if ($direction eq 'in') {
-				push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_out_pct").':AVERAGE:%.1lf%% Out';
-				push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_in_pct").':AVERAGE:%.1lf%% In\n';
+      		if ($direction eq 'in') {
+				if (param('absolute')) {
+					push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_out_pct").':AVERAGE:%.1lf Out';
+					push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_in_pct").':AVERAGE:%.1lf In\n';
+				} else {
+					push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_out_pct").':AVERAGE:%.1lf%% Out';
+					push @{$argsref->{service}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${s}_in_pct").':AVERAGE:%.1lf%% In\n';
+				}
 			}
 		}
 	}
@@ -763,14 +819,18 @@ sub plotreport {
 			} else {
 				$string = 'LINE2:'.&cleanDEF($basename.'_'.$t.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$single_list{$direction}},$t,'src');
 			}
-      			if ($direction eq 'in') {
+      		if ($direction eq 'in') {
 				push @{$argsref->{tos}{in}}, $string.':'.cleanProtocolLabel($basename,$t);
-				push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_out_pct").':AVERAGE:%.1lf%% Out';
-				push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_in_pct").':AVERAGE:%.1lf%% In\n';
+				if (param('absolute')) {
+					push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_out_pct").':AVERAGE:%.1lf Out';
+					push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_in_pct").':AVERAGE:%.1lf In\n';
+				} else {
+					push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_out_pct").':AVERAGE:%.1lf%% Out';
+					push @{$argsref->{tos}{in}}, 'GPRINT:'.&cleanDEF("${basename}_${t}_in_pct").':AVERAGE:%.1lf%% In\n';
+				}
 			} else {
 				push @{$argsref->{tos}{out}}, $string;
 			}
-					
 		}
 	}
 
