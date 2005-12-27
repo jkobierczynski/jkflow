@@ -303,7 +303,12 @@ my $ref=shift;
 		$ref->{multicast}={};
 	}
 	if (defined $refxml->{tos} && !defined $ref->{tos}) {
-		$ref->{tos}={};
+		$ref->{tos}{BE}={};
+		$ref->{tos}{other}={};
+	}
+	if (defined $refxml->{dscp} && !defined $ref->{dscp}) {
+		$ref->{dscp}{BE}={};
+		$ref->{dscp}{other}={};
 	}
 	if (defined $refxml->{total} && !defined $ref->{total}) {
 		$ref->{total}={};
@@ -1308,14 +1313,42 @@ EOF
 	if (defined $ref->{'tos'}) {
 	$countpackets.= <<'EOF';
 	if ($tos == 0) {
-		$typeos="normal";
+		$typeos="BE";
 	} else {
 		$typeos="other";
 	}
-	
+
 	$ref->{'tos'}{$typeos}{$which}{'flows'} ++;
 	$ref->{'tos'}{$typeos}{$which}{'bytes'} += $bytes;
 	$ref->{'tos'}{$typeos}{$which}{'pkts'} += $pkts;
+
+EOF
+	}
+	
+	if (defined $ref->{'dscp'}) {
+	$countpackets.= <<'EOF';
+	if ($tos == 0) {
+		$typeos="BE";
+	} else { 
+		my $class = $tos >> 5;
+		my $drop = ($tos >> 3) & 0x03;
+		if ($class > 0 && $class < 5 && $drop > 0) {
+			$typeos="AF".$class.$drop;
+			#print "DSCP=".$typeos."\n";
+		} elsif ($drop == 0) {
+			$typeos="CS".$class;
+			#print "CS=".$typeos."\n";
+		} elsif ($class == 5 && $drop == 0) {
+			$typeos="EF";
+			#print "DSCP=".$typeos."\n";
+		} else {
+		     $typeos="other";
+		}
+	}
+
+	$ref->{'dscp'}{$typeos}{$which}{'flows'} ++;
+	$ref->{'dscp'}{$typeos}{$which}{'bytes'} += $bytes;
+	$ref->{'dscp'}{$typeos}{$which}{'pkts'} += $pkts;
 
 EOF
 	}
@@ -1576,11 +1609,17 @@ sub reporttorrdfiles {
 	}
 
 	if (defined $ref->{'tos'}) {	
-		foreach my $tos ('normal','other') {
+		foreach my $tos (keys %{$ref->{'tos'}}) {
 			reporttorrd($self,$dir,"tos_". $tos . ".rrd",\%{$ref->{'tos'}{$tos}},$samplerate);
  		}
 	}
 
+	if (defined $ref->{'dscp'}) {	
+		foreach my $dscp (keys %{$ref->{'dscp'}}) {
+			reporttorrd($self,$dir,"tos_". $dscp . ".rrd",\%{$ref->{'dscp'}{$dscp}},$samplerate);
+ 		}
+	}
+	
 	if (defined $ref->{'multicast'}) {	
 		reporttorrd($self,$dir,"protocol_multicast.rrd",\%{$ref->{'multicast'}{'total'}},$samplerate);
 	}
@@ -1852,8 +1891,8 @@ sub scoreboard {
 	##### AGGDATA ######
 	&countAggdata($dir,$ref->{aggregate}{report},\%{$newaggdata},$self->{filetime});
 
-	undef $ref->{count};
-	undef $ref->{tuple};
+	delete $ref->{count};
+	delete $ref->{tuple};
 	undef $newaggdata;
 	return;
 }
@@ -1896,13 +1935,13 @@ sub countAggdata($) {
 			$report->{aggdata}{tuplevalues}{$tuplekey}{'pktsout'} +=	$newaggdata->{$tuplekey}{'pktsout'};
 			$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsin'} +=	$newaggdata->{$tuplekey}{'flowsin'};
 			$report->{aggdata}{tuplevalues}{$tuplekey}{'flowsout'} +=	$newaggdata->{$tuplekey}{'flowsout'};
+			$report->{aggdata}{numresults}++;
 		}
 		# Increment counter
-		$report->{aggdata}{numresults}++;
 		if ($report->{aggdata}{numresults} > $report->{numkeep}) {
 			# Prune this shit
 			$report->{aggdata}{numresults} >>= 1;
-			foreach my $tuplekey (keys %{$report->{aggdata}{tuplevalues}{$tuplekey}}) {
+			foreach my $tuplekey (keys %{$report->{aggdata}{tuplevalues}}) {
 				if ($report->{aggdata}{tuplevalues}{$tuplekey}{'count'} == 1) {     # Delete singletons
 					delete $report->{aggdata}{tuplevalues}{$tuplekey};
 				} else {
