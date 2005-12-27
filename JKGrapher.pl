@@ -90,54 +90,54 @@ my %definedcolors =	(
 			'tcp' => 		{src => 0x0000FF }, # Blue
 			'udp' => 		{src => 0x00FF00 }, # Green
 			'icmp' =>		{src => 0x00D0D0 }, # Cyan
-			'web' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
-			'secureweb' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
-			'tcp_http' => 		{src => 0xFF0000, dst => 0xFF6060 }, # Red
-			'ftp' => 		{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
-			'tcp_ftp' => 		{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
-			'tcp_ftp-data' => 	{src => 0xFFFF00, dst => 0xFFFF40 }, # Yellow
-			'tcp_netbios-ns' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'udp_netbios-ns' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'tcp_netbios-dgm' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'udp_netbios-dgm' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'tcp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'udp_netbios-ssn' =>	{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'windows' => 		{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'netbios' => 		{src => 0x2020FF, dst => 0x6060FF }, # Blue
-			'dns' =>		{src => 0x993399, dst => 0xAA66AA }, # Purple
+			'web' => 		{src => 0xBF0000, dst => 0xFF0000 }, # Red
+			'secureweb' => 		{src => 0xBF0000, dst => 0xFF0000 }, # Red
+			'tcp_http' => 		{src => 0xBF0000, dst => 0xFF0000 }, # Red
+			'ftp' => 		{src => 0xBFBF00, dst => 0xFFFF40 }, # Yellow
+			'tcp_ftp' => 		{src => 0xBFBF00, dst => 0xFFFF40 }, # Yellow
+			'tcp_ftp-data' => 	{src => 0xBFBF00, dst => 0xFFFF40 }, # Yellow
+			'tcp_netbios-ns' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'udp_netbios-ns' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'tcp_netbios-dgm' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'udp_netbios-dgm' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'tcp_netbios-ssn' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'udp_netbios-ssn' =>	{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'windows' => 		{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'netbios' => 		{src => 0x00007F, dst => 0x0000FF }, # Blue
+			'dns' =>		{src => 0xBF00BF, dst => 0xFF00FF }, # Purple
 			'tcp_telnet' =>		{src => 0x707070, dst => 0x909090 }, # Gray
 			'tcp_ssh' =>		{src => 0x707070, dst => 0x909090 }, # Gray
 			'mail' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
 			'mailreading' =>	{src => 0x00FF00, dst => 0x60FF60 }, # Green
 			'tcp_imap' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
 			'tcp_pop3' => 		{src => 0x00FF00, dst => 0x60FF60 }, # Green
-			'tcp_x400' =>	 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
-			'tcp_iso-tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
-			'tcp_iso_tsap' => 	{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
-			'tcp_smtp' => 		{src => 0x409F40, dst => 0x609F60 }, # Green-Gray
+			'tcp_x400' =>	 	{src => 0x00BF00, dst => 0x00FF00 }, # Green-Gray
+			'tcp_iso-tsap' => 	{src => 0x00BF00, dst => 0x00FF00 }, # Green-Gray
+			'tcp_iso_tsap' => 	{src => 0x00BF00, dst => 0x00FF00 }, # Green-Gray
+			'tcp_smtp' => 		{src => 0x00BF00, dst => 0x00FF00 }, # Green-Gray
 			'tcp_nntp' =>		{src => 0xC09010, dst => 0xD0A040 }, # Brown
-			'other' => 		{src => 0xA0A0A0, dst => 0xA0A0A0 }, # Gray
+			'other' => 		{src => 0xA0A0A0, dst => 0xBFBFBF }, # Gray
 			'EF'   =>			{src => 0x993399 }, # Purple
 			'AF41' =>			{src => 0xFFFF10 }, # Yellow
 			'AF42' =>			{src => 0xFFFF40 }, # Yellow
 			'AF43' =>			{src => 0xFFFF70 }, # Yellow
-			'AF31' =>			{src => 0xFF0000 }, # Red
-			'AF32' =>			{src => 0xFF3030 }, # Red
-			'AF33' =>			{src => 0xFF6060 }, # Red
+			'AF31' =>			{src => 0xBF0000 }, # Red
+			'AF32' =>			{src => 0xBF3030 }, # Red
+			'AF33' =>			{src => 0xBF6060 }, # Red
 			'AF21' =>			{src => 0x60FF60 }, # Green
 			'AF22' =>			{src => 0x90FF90 }, # Green
 			'AF23' =>			{src => 0xC0FFC0 }, # Green
-			'AF11' =>			{src => 0x2020FF }, # Blue
+			'AF11' =>			{src => 0x0000BF }, # Blue
 			'AF12' =>			{src => 0x5050FF }, # Blue
 			'AF13' =>			{src => 0x8080FF }, # Blue
 			'CS1'  =>			{src => 0x2020FF }, # Blue
 			'CS2'  =>			{src => 0x60FF60 }, # Green
-			'CS3'  =>			{src => 0xFF0000 }, # Red
+			'CS3'  =>			{src => 0xBF0000 }, # Red
 			'CS4'  =>			{src => 0xFFFF10 }, # Yellow
 			'CS5'  =>			{src => 0xFFFF10 }, # Yellow
 			'CS6'  =>			{src => 0xFFFF10 }, # Yellow
 			'CS7'  =>			{src => 0xFFFF10 }, # Yellow
-			'BE'   =>			{src => 0xA0A0A0 }, # Gray
+			'BE'   =>			{src => 0xBFBFBF }, # Gray
 			'total' => 		{src => 0x00000F } # Black
 );
 
@@ -772,7 +772,7 @@ sub plotreport {
 			$neg='';
 		}
 		foreach my $s (sort keys %{$ref->{'service'}} ) {
-			foreach my $srcdst ('src','dst') {
+			foreach my $srcdst ('dst','src') {
 				if (defined param('service_stacked') && param('service_stacked') eq 1) {
 					if( $countref->{service}{$direction} == 0 ) {
 						$string = 'AREA:'.&cleanDEF($basename.'_'.$s.'_'.$srcdst.'_'.$direction.'_'.$reportType.$neg).&getColor(\@{$double_list{$direction}},$s,$srcdst);
