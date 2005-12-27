@@ -80,6 +80,7 @@ use POSIX;			# We need floor()
 use FindBin;			# To find our executable
 use XML::Simple;
 use HTML::Table;
+use DBM::Deep;
 
 my(%ROUTERS);			# A hash mapping exporter IP's to the name
 				# we want them to be called, e.g.
@@ -106,6 +107,7 @@ my(%myservices);
 my(%myalllist);
 my($subnet);
 my($config);
+my($db);
 
 my($flowrate) = 1;
 my($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst);
@@ -132,6 +134,7 @@ sub parseConfig {
 				'direction','application','defineset','set','report','tuple']);
 
 	$JKFlow::RRDDIR = $config->{rrddir};
+	$JKFlow::DBDIR = $config->{dbdir};
 	$JKFlow::SCOREDIR = $config->{scoredir};
 	if (defined $config->{sampletime}) {
 		$JKFlow::SAMPLETIME=$config->{sampletime};
@@ -139,13 +142,20 @@ sub parseConfig {
 		$JKFlow::SAMPLETIME=300;
 	}
 	
+	if (defined $config->{dbsamples}) {
+		$JKFlow::DBSAMPLES=$config->{dbsamples};
+	} else {
+		$JKFlow::DBSAMPLES=70; 
+	}
+	$JKFlow::mylist{dbsamples}=0;
 	
 	if (defined $config->{all}) {
-		if (defined $config->{'all'}{'localsubnets'}) {
-			$JKFlow::mylist{'all'}{'localsubnets'}=new Net::Patricia || die "Could not create a trie ($!)\n";
-			foreach my $subnet (split(/,/,$config->{all}{'localsubnets'})) {
+		print "DIRECTION: All\n";
+		if (defined $config->{all} && defined $config->{all}{localsubnets}) {
+			$JKFlow::mylist{all}{localsubnets}=new Net::Patricia || die "Could not create a trie ($!)\n";
+			foreach my $subnet (split(/,/,$config->{all}{localsubnets})) {
 				print "All: + localsubnets subnet $subnet\n";
-				$JKFlow::mylist{'all'}{'localsubnets'}->add_string($subnet);
+				$JKFlow::mylist{all}{localsubnets}->add_string($subnet);
 			}
 		}
 		if (defined $config->{all}{samplerate}) {
@@ -262,7 +272,7 @@ my $ref=shift;
 
 	if (defined $refxml->{set}) {
 		foreach my $set (keys %{$refxml->{set}}) {
-			print "parseDirection: ".$set."\n";
+			print "parseSet: ".$set."\n";
 			parseDirection(
 				\%{$config->{definesets}{defineset}{$set}},
 				$ref);
@@ -379,6 +389,14 @@ my $ref=shift;
 			}
 		}
 	}
+	if (defined $refxml->{reportrrd}) {
+		$ref->{reporttype}{rrd}={};
+		print "Reports to RRD\n";
+	}
+	if (defined $refxml->{reportdb}) {
+		$ref->{reporttype}{db}={};
+		print "Reports to DBM::Deep\n";
+	}
 }
 
 sub pushProtocols {
@@ -480,7 +498,7 @@ my $ref=shift;
 my ($srv,$proto,$start,$end,$tmp,$i);
 
 	foreach my $direction (keys %{$refxml}) {
-		print "Adding direction $direction\n";
+		print "DIRECTION: $direction\n";
 		my $fromsubnets=[];
 		my $tosubnets=[];
 		my $nofromsubnets=[];
@@ -1550,13 +1568,14 @@ sub perfile {
     $self->SUPER::perfile(@_);
 }
 
-sub reporttorrd {
+sub reportservice {
 
-	use RRDs;			# To actually produce results
+	use RRDs;
 	my $self=shift;
 	my $dir=shift;
 	my $name=shift;
 	my $ref=shift;
+	my $reporttype=shift;
 	my $samplerate=shift;
 	my $tmp;
 	my @values = ();
@@ -1565,19 +1584,7 @@ sub reporttorrd {
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
 	# Create a new rrd if one doesn't exist
-	if (! -f $file) {
-		print "Creating RRD-File ".$file."\n";
-		$self->createGeneralRRD($file,
-			    qw(
-			       ABSOLUTE in_bytes
-			       ABSOLUTE out_bytes
-			       ABSOLUTE in_pkts
-			       ABSOLUTE out_pkts
-			       ABSOLUTE in_flows
-			       ABSOLUTE out_flows
-			       ));
-	}
-
+	
 	foreach my $i ('bytes','pkts','flows') {
 		foreach my $j ('in','out') {
 			if (!(defined($tmp = $ref->{$j}{$i}))) {
@@ -1588,11 +1595,36 @@ sub reporttorrd {
 			}
 		}
 	}
-	$self->updateRRD($dir,$name, @values);
-	#print "File: $dir $name @values\n";
+
+	if (defined $reporttype->{rrd}) {
+		if (! -f $file) {
+		print "Creating RRD-File ".$file."\n";
+		$self->createGeneralRRD($file,
+			    qw(
+			       ABSOLUTE in_bytes
+			       ABSOLUTE out_bytes
+			       ABSOLUTE in_pkts
+			       ABSOLUTE out_pkts
+			       ABSOLUTE in_flows
+			       ABSOLUTE out_flows
+			       ));
+		}
+		$self->updateRRD($dir,$name,@values);
+	}
+	
+	if (defined $reporttype->{db}) {
+		#print "File: $dir $name @values\n";
+		if (join(':', @values) ne '0:0:0:0:0:0') {
+	        	if (!defined $db->{data}{$self->{filetime}}{$dir}) {
+				$db->{data}{$self->{filetime}}{$dir}={};
+			}
+			$db->{data}{$self->{filetime}}{$dir}{$name}=[ @values ];
+		}
+		$db->{config}{$dir}{$name}=1;
+	}
 }
 
-sub reporttorrdfiles {
+sub reportservices {
 
 	use RRDs;
 	my $self=shift;
@@ -1601,27 +1633,31 @@ sub reporttorrdfiles {
 	my $samplerate=shift;
 	my ($file,$tmp);
 
+	if (! -d $JKFlow::RRDDIR."/".$dir && defined $ref->{reporttype}{rrd} ) {
+		mkdir($JKFlow::RRDDIR."/".$dir,0755);
+	}
+
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
  	# Create a new rrd if one doesn't exist
 	if (defined $ref->{'total'}) {	
-		reporttorrd($self,$dir,"total.rrd",\%{$ref->{'total'}},$samplerate);
+		reportservice($self,$dir,"total.rrd",\%{$ref->{'total'}},$ref->{reporttype},$samplerate);
 	}
 
 	if (defined $ref->{'tos'}) {	
 		foreach my $tos (keys %{$ref->{'tos'}}) {
-			reporttorrd($self,$dir,"tos_". $tos . ".rrd",\%{$ref->{'tos'}{$tos}},$samplerate);
+			reportservice($self,$dir,"tos_". $tos . ".rrd",\%{$ref->{'tos'}{$tos}},$ref->{reporttype},$samplerate);
  		}
 	}
 
 	if (defined $ref->{'dscp'}) {	
 		foreach my $dscp (keys %{$ref->{'dscp'}}) {
-			reporttorrd($self,$dir,"tos_". $dscp . ".rrd",\%{$ref->{'dscp'}{$dscp}},$samplerate);
+			reportservice($self,$dir,"tos_". $dscp . ".rrd",\%{$ref->{'dscp'}{$dscp}},$ref->{reporttype},$samplerate);
  		}
 	}
 	
 	if (defined $ref->{'multicast'}) {	
-		reporttorrd($self,$dir,"protocol_multicast.rrd",\%{$ref->{'multicast'}{'total'}},$samplerate);
+		reportservice($self,$dir,"protocol_multicast.rrd",\%{$ref->{'multicast'}{'total'}},$ref->{reporttype},$samplerate);
 	}
 
 	if (defined $ref->{'protocol'}) {	
@@ -1632,21 +1668,21 @@ sub reporttorrdfiles {
 			if ($protocol eq 'other') {
 				$tmp = 'other';
 			}
-			reporttorrd($self,$dir,"protocol_" . $tmp . ".rrd",\%{$ref->{'protocol'}{$protocol}{'total'}},$samplerate);
+			reportservice($self,$dir,"protocol_" . $tmp . ".rrd",\%{$ref->{'protocol'}{$protocol}{'total'}},$ref->{reporttype},$samplerate);
 		}
 	}
 
 	if (defined $ref->{'application'}) {	
 		foreach my $src ('src','dst') {
 			foreach my $application (keys %{$ref->{'application'}}) {
-				reporttorrd($self,$dir,"service_" . $application . "_" . $src . ".rrd",\%{$ref->{'application'}{$application}{$src}},$samplerate);
+				reportservice($self,$dir,"service_" . $application . "_" . $src . ".rrd",\%{$ref->{'application'}{$application}{$src}},$ref->{reporttype},$samplerate);
 			}
 		}
 	}
 
 	if (defined $ref->{'ftp'}) {	
 		foreach my $src ('src','dst') {
-			reporttorrd($self,$dir,"service_ftp_" . $src . ".rrd",\%{$ref->{'ftp'}{$src}},$samplerate);
+			reportservice($self,$dir,"service_ftp_" . $src . ".rrd",\%{$ref->{'ftp'}{$src}},$ref->{reporttype},$samplerate);
 		}
 		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
 			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 2*60*60 ||
@@ -1657,8 +1693,15 @@ sub reporttorrdfiles {
 		}
 	}
 
+	if (! -d $JKFlow::SCOREDIR."/".$dir && defined $ref->{'scoreboard'} ) {
+		mkdir($JKFlow::SCOREDIR."/".$dir,0755);
+	}
 	if (defined $ref->{'scoreboard'}) {
 		scoreboard($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
+	}
+
+	if (! -d $JKFlow::SCOREDIR."/".$dir."/other" && defined $ref->{'scoreboardother'}  ) {
+		mkdir($JKFlow::SCOREDIR."/".$dir."/other",0755);
 	}
 	if (defined $ref->{'scoreboardother'}) {
 		scoreboard($self, $dir . "/other" , \%{$ref->{'scoreboardother'}}, $samplerate );
@@ -1672,7 +1715,7 @@ sub reporttorrdfiles {
 			if (! -d $JKFlow::SCOREDIR . $dir."/".$direction ) {
 				mkdir($JKFlow::SCOREDIR . $dir . "/" . $direction ,0755);
 			}
-			reporttorrdfiles($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}},$ref->{'direction'}{$direction}{'samplerate'});
+			reportservices($self, $dir . "/" . $direction, \%{$ref->{'direction'}{$direction}},$ref->{'direction'}{$direction}{'samplerate'});
 		}
 	}
 }
@@ -1680,44 +1723,37 @@ sub reporttorrdfiles {
 sub report {
 	my $self = shift;
 
+	if ($JKFlow::mylist{dbsamples} == 0) {
+		$JKFlow::mylist{dbsamples}=$JKFlow::DBSAMPLES;
+		$db = new DBM::Deep $JKFlow::DBDIR."/jkflow-".$JKFlow::DBSAMPLES."-".$self->{filetime}.".db";
+		$db->{time}=[];
+		$db->{data}{$self->{filetime}}={};
+		$db->{sampletime}=$JKFlow::SAMPLETIME;
+	}
+	$JKFlow::mylist{dbsamples}--;
+
+	push @{$db->{time}},$self->{filetime};
+	
 	if (defined $JKFlow::mylist{'all'}) {
-		if (! -d $JKFlow::RRDDIR."/all" ) {
-			mkdir($JKFlow::RRDDIR."/all",0755);
-		}
-		if (! -d $JKFlow::SCOREDIR."/all" ) {
-			mkdir($JKFlow::SCOREDIR."/all",0755);
-		}
-		if (! -d $JKFlow::SCOREDIR."/all/other" ) {
-			mkdir($JKFlow::SCOREDIR."/all/other",0755);
-		}
-		reporttorrdfiles($self, "/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
+		reportservices($self, "/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
 
 	foreach my $direction (keys %{$JKFlow::mylist{'direction'}}) {
-		if (! -d $JKFlow::RRDDIR."/".$direction ) {
-			mkdir($JKFlow::RRDDIR."/".$direction ,0755);
-		}
-		if (! -d $JKFlow::SCOREDIR."/".$direction ) {
-			mkdir($JKFlow::SCOREDIR."/".$direction ,0755);
-		}
-		if (! -d $JKFlow::SCOREDIR."/".$direction . "/other" ) {
-			mkdir($JKFlow::SCOREDIR."/".$direction . "/other" ,0755);
-		}
-		reporttorrdfiles($self, "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
+		reportservices($self, "/" . $direction, \%{$JKFlow::mylist{'direction'}{$direction}},$JKFlow::mylist{'direction'}{$direction}{'samplerate'});
 	}   
 }
 
 # Lifted totally and shamelessly from CampusIO.pm
 # I think perhaps this goes into FlowScan.pm, but...
 sub updateRRD {
-   my $self = shift;
-   my $dir = shift;
-   my $file = shift;
-   my @values = @_;
-
-   RRDs::update($JKFlow::RRDDIR."/".$dir."/".$file, $self->{filetime} . ':' . join(':', @values));
-   my $err=RRDs::error;
-   warn "ERROR updating". $JKFlow::RRDDIR."/".$dir."/"."$file: $err\n" if ($err);
+  my $self = shift;
+  my $dir = shift;
+  my $file = shift;
+  my @values = @_;
+   
+  RRDs::update($JKFlow::RRDDIR."/".$dir."/".$file, $self->{filetime} . ':' . join(':', @values));
+  my $err=RRDs::error;
+  warn "ERROR updating". $JKFlow::RRDDIR."/".$dir."/"."$file: $err\n" if ($err);
 }
 
 
