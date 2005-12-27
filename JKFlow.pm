@@ -1572,19 +1572,20 @@ sub reportservice {
 
 	use RRDs;
 	my $self=shift;
-	my $dir=shift;
-	my $name=shift;
 	my $ref=shift;
 	my $reporttype=shift;
 	my $samplerate=shift;
+	my $dir=shift;  
+	my $type=shift;
+	my $name=shift;
 	my $tmp;
 	my @values = ();
-	my $file=$JKFlow::RRDDIR."/".$dir."/".$name;
+	my $file=$JKFlow::RRDDIR."/".$dir."/".$type."_".$name.".rrd";
 
 	# First, always generate a totals report
 	# createGeneralRRD we get from our parent, FlowScan
 	# Create a new rrd if one doesn't exist
-	
+  
 	foreach my $i ('bytes','pkts','flows') {
 		foreach my $j ('in','out') {
 			if (!(defined($tmp = $ref->{$j}{$i}))) {
@@ -1609,18 +1610,21 @@ sub reportservice {
 			       ABSOLUTE out_flows
 			       ));
 		}
-		$self->updateRRD($dir,$name,@values);
+		$self->updateRRD($file,@values);
 	}
-	
+  
 	if (defined $reporttype->{db}) {
 		#print "File: $dir $name @values\n";
 		if (join(':', @values) ne '0:0:0:0:0:0') {
-	        	if (!defined $db->{data}{$self->{filetime}}{$dir}) {
-				$db->{data}{$self->{filetime}}{$dir}={};
+			if (!defined $db->{data}{$self->{filetime}}{$dir}) {
+				$db->{data}{$self->{filetime}}{$dir}={}; 
 			}
-			$db->{data}{$self->{filetime}}{$dir}{$name}=[ @values ];
+			if (!defined $db->{data}{$self->{filetime}}{$dir}{$type}) {
+				$db->{data}{$self->{filetime}}{$dir}{$type}={};
+			}
+			$db->{data}{$self->{filetime}}{$dir}{$type}{$name}=[ @values ];
 		}
-		$db->{config}{$dir}{$name}=1;
+		$db->{config}{$dir}{$type}{$name}=1;
 	}
 }
 
@@ -1641,23 +1645,23 @@ sub reportservices {
 	# createGeneralRRD we get from our parent, FlowScan
  	# Create a new rrd if one doesn't exist
 	if (defined $ref->{'total'}) {	
-		reportservice($self,$dir,"total.rrd",\%{$ref->{'total'}},$ref->{reporttype},$samplerate);
+		reportservice($self,\%{$ref->{'total'}},$ref->{reporttype},$samplerate,$dir,"total","total");
 	}
 
 	if (defined $ref->{'tos'}) {	
 		foreach my $tos (keys %{$ref->{'tos'}}) {
-			reportservice($self,$dir,"tos_". $tos . ".rrd",\%{$ref->{'tos'}{$tos}},$ref->{reporttype},$samplerate);
+			reportservice($self,\%{$ref->{'tos'}{$tos}},$ref->{reporttype},$samplerate,$dir,"tos",$tos);
  		}
 	}
 
 	if (defined $ref->{'dscp'}) {	
 		foreach my $dscp (keys %{$ref->{'dscp'}}) {
-			reportservice($self,$dir,"tos_". $dscp . ".rrd",\%{$ref->{'dscp'}{$dscp}},$ref->{reporttype},$samplerate);
+			reportservice($self,\%{$ref->{'dscp'}{$dscp}},$ref->{reporttype},$samplerate,$dir,"tos",$dscp);
  		}
 	}
 	
 	if (defined $ref->{'multicast'}) {	
-		reportservice($self,$dir,"protocol_multicast.rrd",\%{$ref->{'multicast'}{'total'}},$ref->{reporttype},$samplerate);
+		reportservice($self,\%{$ref->{'multicast'}{'total'}},$ref->{reporttype},$samplerate,$dir,"protocol","multicast");
 	}
 
 	if (defined $ref->{'protocol'}) {	
@@ -1668,21 +1672,21 @@ sub reportservices {
 			if ($protocol eq 'other') {
 				$tmp = 'other';
 			}
-			reportservice($self,$dir,"protocol_" . $tmp . ".rrd",\%{$ref->{'protocol'}{$protocol}{'total'}},$ref->{reporttype},$samplerate);
+			reportservice($self,\%{$ref->{'protocol'}{$protocol}{'total'}},$ref->{reporttype},$samplerate,$dir,"protocol", $tmp);
 		}
 	}
 
 	if (defined $ref->{'application'}) {	
 		foreach my $src ('src','dst') {
 			foreach my $application (keys %{$ref->{'application'}}) {
-				reportservice($self,$dir,"service_" . $application . "_" . $src . ".rrd",\%{$ref->{'application'}{$application}{$src}},$ref->{reporttype},$samplerate);
+				reportservice($self,\%{$ref->{'application'}{$application}{$src}},$ref->{reporttype},$samplerate,$dir,"service",$application."_".$src);
 			}
 		}
 	}
 
 	if (defined $ref->{'ftp'}) {	
 		foreach my $src ('src','dst') {
-			reportservice($self,$dir,"service_ftp_" . $src . ".rrd",\%{$ref->{'ftp'}{$src}},$ref->{reporttype},$samplerate);
+			reportservice($self,\%{$ref->{'ftp'}{$src}},$ref->{reporttype},$samplerate,$dir,"service","ftp_".$src);
 		}
 		foreach my $pair (keys %{$ref->{'ftp'}{cache}}) {
 			if ($self->{filetime}-$ref->{'ftp'}{cache}{$pair} > 2*60*60 ||
@@ -1697,6 +1701,9 @@ sub reportservices {
 		mkdir($JKFlow::SCOREDIR."/".$dir,0755);
 	}
 	if (defined $ref->{'scoreboard'}) {
+		if (defined $ref->{reporttype}{db}) {
+			reporttuples($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
+		}
 		scoreboard($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
 	}
 
@@ -1733,7 +1740,7 @@ sub report {
 	$JKFlow::mylist{dbsamples}--;
 
 	push @{$db->{time}},$self->{filetime};
-	
+  
 	if (defined $JKFlow::mylist{'all'}) {
 		reportservices($self, "/all",\%{$JKFlow::mylist{'all'}},$JKFlow::mylist{'all'}{'samplerate'});
 	}
@@ -1746,16 +1753,61 @@ sub report {
 # Lifted totally and shamelessly from CampusIO.pm
 # I think perhaps this goes into FlowScan.pm, but...
 sub updateRRD {
-  my $self = shift;
-  my $dir = shift;
-  my $file = shift;
-  my @values = @_;
+	my $self = shift;
+	my $file = shift;
+	my @values = @_;
    
-  RRDs::update($JKFlow::RRDDIR."/".$dir."/".$file, $self->{filetime} . ':' . join(':', @values));
-  my $err=RRDs::error;
-  warn "ERROR updating". $JKFlow::RRDDIR."/".$dir."/"."$file: $err\n" if ($err);
+	RRDs::update($file, $self->{filetime} . ':' . join(':', @values));
+	my $err=RRDs::error;
+	warn "ERROR updating $file: $err\n" if ($err);
 }
 
+sub reporttuples {
+	my $self = shift;
+	my $dir = shift;
+	my $ref = shift;
+	my $samplerate = shift;
+
+	my ($i,$tuplekey);
+	my ($values, @sorted);
+	my $topdata = {};
+
+	foreach my $direction ('in', 'out') {
+		foreach my $key ('bytes','pkts','flows') {
+			my @sorted = sort {$ref->{count}{$b}{$key}{$direction} <=> $ref->{count}{$a}{$key}{$direction}} (keys %{$ref->{count}});
+			for($i=0;$i < @sorted; $i++) {
+				last unless $i < $JKFlow::SCOREKEEP;
+				$tuplekey = $sorted[$i];
+				if (!defined $topdata->{$tuplekey}) { # Add this to aggdata 1x
+					$topdata->{$tuplekey} = {
+						'tuple'    => $ref->{tuple}{$tuplekey},
+						'bytesin'  => $ref->{count}{$tuplekey}{bytes}{in} * $samplerate,
+						'bytesout' => $ref->{count}{$tuplekey}{bytes}{out} * $samplerate,
+						'pktsin'   => $ref->{count}{$tuplekey}{pkts}{in} * $samplerate,
+						'pktsout'  => $ref->{count}{$tuplekey}{pkts}{out} * $samplerate,
+						'flowsin'  => $ref->{count}{$tuplekey}{flows}{in} * $samplerate,
+						'flowsout' => $ref->{count}{$tuplekey}{flows}{out} * $samplerate
+					};
+				}
+			}
+		}
+	}
+
+	foreach $tuplekey ( keys %{$topdata} ) {
+		if (!defined $db->{data}{$self->{filetime}}{$dir}) {
+			$db->{data}{$self->{filetime}}{$dir}={};
+			$db->{data}{$self->{filetime}}{$dir}{tuples}={};
+		}
+		$db->{data}{$self->{filetime}}{$dir}{tuples}{$tuplekey} = [
+			$topdata->{$tuplekey}{bytesin}, 
+			$topdata->{$tuplekey}{bytesout},
+			$topdata->{$tuplekey}{pktsin},
+			$topdata->{$tuplekey}{pktsout},
+			$topdata->{$tuplekey}{flowsin},
+			$topdata->{$tuplekey}{flowsout} ];
+		$db->{config}{$dir}{tuples}{$tuplekey}=1;
+	}
+}
 
 # Handle writing our HTML scoreboard reports
 sub scoreboard {    
@@ -1777,27 +1829,16 @@ sub scoreboard {
 	$mon++; $year += 1900;
 	
 	if (defined $ref->{every}) {
-		
-		$file=$JKFlow::SCOREDIR.$dir;
 
+		if (! -d $JKFlow::SCOREDIR.$dir) {
+			mkdir($JKFlow::SCOREDIR.$dir,0755) || die "Cannot mkdir $file ($!)\n";
+		}
+		$file = sprintf("%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR.$dir,$type,$year,$mon,$mday);
 		if (! -d $file) {
 			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
 		}
-
-		$file=sprintf("%s%s/%s/%4.4d-%2.2d-%2.2d",$JKFlow::SCOREDIR,$dir,$type,$year,$mon,$mday);
-
-		if (! -d $file) {
-			mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		}
-
-		#$file = sprintf("%s/%2.2d",$file,$hour);
-		#if (! -d $file) {
-		#	mkdir($file,0755) || die "Cannot mkdir $file ($!)\n";
-		#}
-
-		$file = sprintf("%s/%2.2d:%2.2d:%2.2d.html",$file,$hour,$min,$sec);
+		$file = sprintf("%s/%s/%4.4d-%2.2d-%2.2d/%2.2d:%2.2d:%2.2d.html",$JKFlow::SCOREDIR.$dir,$type,$year,$mon,$mday,$hour,$min,$sec);
 		open(HTML,">$file") || die "Could not write to $file ($!)\n";
-
 		# Now, print out our header stuff into the file
 		print HTML "<html>\n<body bgcolor=\"\#ffffff\">\n<center>\n\n";
 
@@ -1805,11 +1846,9 @@ sub scoreboard {
 	
 	# Now, print out our 6 topN tables
 	my %columns = ('bytes' => 4, 'pkts' => 6, 'flows' => 8);
-
 	@values = ();
 
 	foreach my $direction ('in', 'out') {
-
 		foreach my $key ('bytes','pkts','flows') {
 
 			my @sorted = sort {$ref->{count}{$b}{$key}{$direction} <=> $ref->{count}{$a}{$key}{$direction}} (keys %{$ref->{count}});
