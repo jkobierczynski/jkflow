@@ -19,6 +19,16 @@ use GD::Graph::lines;
 use GD::Graph::bars;
 use GD::Graph::mixed;
 
+### It's a lot of "Filehandle GEN* opened only for input at
+### /usr/lib/perl5/5.8.5/i386-linux-thread-multi/IO/Handle.pm line 399"
+### messages, so just drop them. Comment these next lines if you have troubles!
+
+BEGIN {
+use CGI::Carp qw(carpout);
+open (LOG, ">>/dev/null") or die "Carp doesn't load $!\n";
+carpout(*LOG);
+}
+
 ### Local settings ###
 
 ### Important: check the %definedcolors keys with /etc/services, or
@@ -285,12 +295,6 @@ sub showMenu {
                                                           -checked => 'on',
                                                           -label => '' ));
 
-     print $q->td( { -rowspan => '1' },
-                     "Absolute: ", $q->checkbox( -name => "absolute",
-                                                 -value => '1',
-                                                 -checked => 'off',
-                                                 -label => '' ));
-
      print $q->end_Tr();
      print $q->end_table();
      print $q->center( $q->submit( -name => '',-value => 'Generate graph' ),
@@ -318,13 +322,25 @@ sub showMenu {
      foreach my $direction (@directions) {
            print $q->start_Tr;
            print $q->td( { -align => 'center' }, $q->b($direction));
-           print $q->td( $q->scrolling_list(-name => "${direction}_protocol",-values => [sort keys %{$config{protocol}{$direction}}],-size => 5,-multiple => 'true' ) );
+           print $q->td( $q->scrolling_list( 
+            -name => "${direction}_protocol",
+            -values => [sort {$config{protocol}{$direction}{$b} <=> $config{protocol}{$direction}{$a}} (keys %{$config{protocol}{$direction}})],
+            -size => 5,-multiple => 'true' ) );
            print $q->td( $q->checkbox(-name => "${direction}_all_protocols",-value => '1',-label => 'Yes' ) );
-           print $q->td( $q->scrolling_list( -name => "${direction}_service",-values => [sort keys %{$config{service}{$direction}}],-size => 5,-multiple => 'true' ) );
+           print $q->td( $q->scrolling_list(
+            -name => "${direction}_service",
+             -values => [sort {$config{service}{$direction}{$b} <=> $config{service}{$direction}{$a}} (keys %{$config{service}{$direction}})],
+            -size => 5,-multiple => 'true' ) );
            print $q->td( $q->checkbox( -name => "${direction}_all_services",-value => '1',-label => 'Yes' ) );
-           print $q->td( $q->scrolling_list( -name => "${direction}_tos",-values => [sort keys %{$config{tos}{$direction}}],-size => 5,-multiple => 'true' ) );
+           print $q->td( $q->scrolling_list(
+            -name => "${direction}_tos",
+            -values => [sort {$config{tos}{$direction}{$b} <=> $config{tos}{$direction}{$a}} (keys %{$config{tos}{$direction}})],
+            -size => 5,-multiple => 'true' ) );
            print $q->td( $q->checkbox( -name => "${direction}_all_tos",-value => '1',-label => 'Yes' ) );
-           print $q->td( $q->scrolling_list( -name => "${direction}_tuples",-values => [sort keys %{$config{tuples}{$direction}}],-size => 5,-multiple => 'true' ) );
+           print $q->td( $q->scrolling_list( 
+            -name => "${direction}_tuples",
+            -values => [sort {$config{tuples}{$direction}{$b} <=> $config{tuples}{$direction}{$a}} (keys %{$config{tuples}{$direction}})],
+            -size => 5,-multiple => 'true' ) );
            print $q->td( $q->checkbox( -name => "${direction}_all_tuples",-value => '1',-label => 'Yes' ) );
            if (defined $config{total}{$direction}) {
              print $q->td( $q->checkbox( -name => "${direction}_total",-value => '1',-label => 'Yes') );
@@ -466,16 +482,16 @@ sub getDBContent {
         );
         foreach my $direction ( @directions ) {
           foreach my $protocol (keys %{$dbtemp->{config}{$direction}{protocol}}) {
-             $config{protocol}{$direction}{$protocol}=1;
+             $config{protocol}{$direction}{$protocol}+=$dbtemp->{config}{$direction}{protocol}{$protocol};
           }
           foreach my $service (keys %{$dbtemp->{config}{$direction}{service}}) {
-             $config{service}{$direction}{$service}=1;
+             $config{service}{$direction}{$service}+=$dbtemp->{config}{$direction}{service}{$service};
           }
           foreach my $tos (keys %{$dbtemp->{config}{$direction}{tos}}) {
-             $config{tos}{$direction}{$tos}=1;
+             $config{tos}{$direction}{$tos}+=$dbtemp->{config}{$direction}{tos}{$tos};
           }
           foreach my $tuple (keys %{$dbtemp->{config}{$direction}{tuples}}) {
-             $config{tuples}{$direction}{$tuple}=1;
+             $config{tuples}{$direction}{$tuple}+=$dbtemp->{config}{$direction}{tuples}{$tuple};
           }
           if (defined $dbtemp->{config}{$direction}{total}{total}) {
              $config{total}{$direction}{total}=1;
