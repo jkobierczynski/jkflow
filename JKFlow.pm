@@ -97,7 +97,7 @@ my($SCOREDIR) = '.';		# The directory we will stow rrd files in
 $JKFlow::SCOREKEEP = 10;        # The top N addresses to report on. By default
 				# don't keep scoreboards.
 
-$JKFlow::AGGSCOREKEEP = 10;				
+$JKFlow::AGGSCOREKEEP = 20;				
 #my($scorepage) = 'index.html';	# The link to the current page
 #my($aggscorekeep) = 10;		# Do not create an overall rankings file
 
@@ -326,7 +326,19 @@ my $ref=shift;
 	if (defined $refxml->{monitor} && $refxml->{monitor} == "yes" && !defined $ref->{monitor}) {
 		$ref->{monitor}="yes";
 	}
+	if (defined $refxml->{tuples}) {
+		$ref->{tuples}{scorekeep} = (defined $refxml->{tuples}{scorekeep} ? $refxml->{tuples}{scorekeep} : $JKFlow::SCOREKEEP);
+		foreach my $tuple (@{$refxml->{tuples}{tuple}}) {
+			my $tuplestring="["; my $comma="";
+			foreach my $proto (split(/,/,$tuple)) {
+				$tuplestring.=$comma."\$$proto";
+				$comma=",";
+			}
+			$ref->{tuples}{$tuplestring."]"}={};
+		}
+	}
 	if (defined $refxml->{scoreboard}) {
+		$ref->{scoreboard}=$ref->{tuples};
 		if (defined $refxml->{scoreboard}{every}) {
 			$ref->{scoreboard}{every}={};
 			if (defined $refxml->{scoreboard}{latest}) {
@@ -335,6 +347,7 @@ my $ref=shift;
 			}
 		}
 		if (defined $refxml->{scoreboard}{tuples}) {
+			$ref->{scoreboard}{tuples}{scorekeep} = (defined $refxml->{scoreboard}{tuples}{scorekeep} ? $refxml->{scoreboard}{tuples}{scorekeep} : $JKFlow::SCOREKEEP);
 			foreach my $tuple (@{$refxml->{scoreboard}{tuples}{tuple}}) {
 				my $tuplestring="["; my $comma="";
 				foreach my $proto (split(/,/,$tuple)) {
@@ -352,8 +365,8 @@ my $ref=shift;
 					{	'count' => $report->{count},
 						'offset' => (defined $report->{offset} ? $report->{offset} : 0),
 						'filenamebase' => $report->{base},
-						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
-						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : $JKFlow::AGGSCOREKEEP), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : $JKFlow::NUMKEEP) };
 				}
 			}
 		}
@@ -367,7 +380,18 @@ my $ref=shift;
 			}
 		}
 		if (defined $refxml->{scoreboardother}{tuples}) {
+			$ref->{scoreboardother}{tuples}{scorekeep} = (defined $refxml->{scoreboardother}{tuples}{scorekeep} ? $refxml->{scoreboardother}{tuples}{scorekeep} : $JKFlow::SCOREKEEP);
 			foreach my $tuple (@{$refxml->{scoreboardother}{tuples}{tuple}}) {
+				my $tuplestring="[";my $comma="";
+				foreach my $proto (split(/,/,$tuple)) {
+					$tuplestring.=$comma."\$$proto";
+					$comma=",";
+				}
+				$ref->{scoreboardother}{tuples}{$tuplestring."]"}={};
+			}
+		} elsif (defined $refxml->{tuples}) {
+			$ref->{scoreboardother}{tuples}{scorekeep} = (defined $refxml->{tuples}{scorekeep} ? $refxml->{tuples}{scorekeep} : $JKFlow::SCOREKEEP);
+			foreach my $tuple (@{$refxml->{tuples}{tuple}}) {
 				my $tuplestring="[";my $comma="";
 				foreach my $proto (split(/,/,$tuple)) {
 					$tuplestring.=$comma."\$$proto";
@@ -383,8 +407,8 @@ my $ref=shift;
 					push @{$ref->{scoreboardother}{aggregate}{report}},
 					{	'count' => $report->{count},
 						'filenamebase' => $report->{base},
-						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : 10), 
-						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : 50) };
+						'scorekeep' => (defined $report->{scorekeep} ? $report->{scorekeep} : $JKFlow::AGGSCOREKEEP), 
+						'numkeep' => (defined $report->{numkeep} ? $report->{numkeep} : $JKFlow::NUMKEEP) };
 				}
 			}
 		}
@@ -1443,9 +1467,22 @@ EOF
 			$servicecounted=1;
 EOF
 	}
-	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'}) {
+	if (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{'scoreboardother'}{tuples}) {
 	$countpackets.= <<'EOF';
 			foreach my $tuple (keys %{$ref->{'scoreboardother'}{tuples}}) {
+				#print "Tuple:".$tuple."\n";
+				my $tuplevalues=eval($tuple);
+				my $tuplestring=join('-',@{$tuplevalues});
+				#print "TupleValues:$tuplestring\n";
+				$ref->{scoreboardother}{count}{"$tuplestring"}{flows}{$which} ++;
+				$ref->{scoreboardother}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
+				$ref->{scoreboardother}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
+				$ref->{scoreboardother}{tuple}{"$tuplestring"}="$tuple";
+			}
+EOF
+	} elsif (defined $ref->{'service'} && defined $ref->{'application'}{'other'} && defined $ref->{'scoreboardother'} && defined $ref->{tuples}) {
+	$countpackets.= <<'EOF';
+			foreach my $tuple (keys %{$ref->{tuples}}) {
 				#print "Tuple:".$tuple."\n";
 				my $tuplevalues=eval($tuple);
 				my $tuplestring=join('-',@{$tuplevalues});
@@ -1472,17 +1509,31 @@ EOF
 EOF
 	}
 
-	if (defined $ref->{'scoreboard'}) {
+	if (defined $ref->{'scoreboard'} && defined $ref->{'scoreboard'}{tuples}) {
 	$countpackets.= <<'EOF';
 	foreach my $tuple (keys %{$ref->{'scoreboard'}{tuples}}) {
 		#print "Tuple:".$tuple."\n";
 		my $tuplevalues=eval($tuple);
 		my $tuplestring=join('-',@{$tuplevalues});
 		#print "TupleValues:$tuplestring\n";
-		$ref->{scoreboard}{count}{"$tuplestring"}{flows}{$which} ++;
-		$ref->{scoreboard}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
-		$ref->{scoreboard}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
-		$ref->{scoreboard}{tuple}{"$tuplestring"}="$tuple";
+		$ref->{tuples}{count}{"$tuplestring"}{flows}{$which} ++;
+		$ref->{tuples}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
+		$ref->{tuples}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
+		$ref->{tuples}{tuple}{"$tuplestring"}="$tuple";
+	}
+
+EOF
+	} elsif (defined $ref->{tuples} && (defined $ref->{reporttype}{db} || defined $ref->{'scoreboard'})) {
+	$countpackets.= <<'EOF';
+	foreach my $tuple (keys %{$ref->{tuples}}) {
+		#print "Tuple:".$tuple."\n";
+		my $tuplevalues=eval($tuple);
+		my $tuplestring=join('-',@{$tuplevalues});
+		#print "TupleValues:$tuplestring\n";
+		$ref->{tuples}{count}{"$tuplestring"}{flows}{$which} ++;
+		$ref->{tuples}{count}{"$tuplestring"}{bytes}{$which} += $bytes;
+		$ref->{tuples}{count}{"$tuplestring"}{pkts}{$which} += $pkts;
+		$ref->{tuples}{tuple}{"$tuplestring"}="$tuple";
 	}
 
 EOF
@@ -1625,7 +1676,7 @@ sub reportservice {
 			}
 			$db->{data}{$self->{filetime}}{$dir}{$type}{$name}=[ @values ];
 		}
-		$db->{config}{$dir}{$type}{$name}=1;
+		$db->{config}{$dir}{$type}{$name}+=$values[0]+$values[1];
 	}
 }
 
@@ -1697,24 +1748,30 @@ sub reportservices {
 			}
 		}
 	}
-
-	if (! -d $JKFlow::SCOREDIR."/".$dir && defined $ref->{'scoreboard'} ) {
-		mkdir($JKFlow::SCOREDIR."/".$dir,0755);
+	if (defined $ref->{reporttype}{db}) {
+		reporttuples($self, $dir , \%{$ref->{'tuples'}}, $samplerate );
 	}
 	if (defined $ref->{'scoreboard'}) {
-		if (defined $ref->{reporttype}{db}) {
-			reporttuples($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
+		if (! -d $JKFlow::SCOREDIR."/".$dir) {
+			mkdir($JKFlow::SCOREDIR."/".$dir,0755);
 		}
 		scoreboard($self, $dir , \%{$ref->{'scoreboard'}}, $samplerate );
 	}
-
-	if (! -d $JKFlow::SCOREDIR."/".$dir."/other" && defined $ref->{'scoreboardother'}  ) {
-		mkdir($JKFlow::SCOREDIR."/".$dir."/other",0755);
+	if (defined $ref->{reporttype}{db} || defined $ref->{'scoreboard'}) {
+		delete $ref->{'tuples'}{count};
+		delete $ref->{'tuples'}{tuple};
 	}
 	if (defined $ref->{'scoreboardother'}) {
+		if (! -d $JKFlow::SCOREDIR."/".$dir) {
+			mkdir($JKFlow::SCOREDIR."/".$dir,0755);
+		}
+		if (! -d $JKFlow::SCOREDIR."/".$dir."/other") {
+			mkdir($JKFlow::SCOREDIR."/".$dir."/other",0755);
+		}
 		scoreboard($self, $dir . "/other" , \%{$ref->{'scoreboardother'}}, $samplerate );
+		delete $ref->{'scoreboardother'}{count};
+		delete $ref->{'scoreboardother'}{tuple};
 	}
-	
 	if (defined $ref->{'direction'}) {
 		foreach my $direction (keys %{$ref->{'direction'}}) {
 			if (! -d $JKFlow::RRDDIR . $dir."/".$direction ) {
@@ -1777,7 +1834,7 @@ sub reporttuples {
 		foreach my $key ('bytes','pkts','flows') {
 			my @sorted = sort {$ref->{count}{$b}{$key}{$direction} <=> $ref->{count}{$a}{$key}{$direction}} (keys %{$ref->{count}});
 			for($i=0;$i < @sorted; $i++) {
-				last unless $i < $JKFlow::SCOREKEEP;
+				last unless $i < $ref->{scorekeep};
 				$tuplekey = $sorted[$i];
 				if (!defined $topdata->{$tuplekey}) { # Add this to aggdata 1x
 					$topdata->{$tuplekey} = {
@@ -1805,8 +1862,9 @@ sub reporttuples {
 			$topdata->{$tuplekey}{pktsin},
 			$topdata->{$tuplekey}{pktsout},
 			$topdata->{$tuplekey}{flowsin},
-			$topdata->{$tuplekey}{flowsout} ];
-		$db->{config}{$dir}{tuples}{$tuplekey}=1;
+			$topdata->{$tuplekey}{flowsout}
+		];
+		$db->{config}{$dir}{tuples}{$tuplekey}+=$topdata->{$tuplekey}{bytesin}+$topdata->{$tuplekey}{bytesout};
 	}
 }
 
@@ -1889,7 +1947,7 @@ sub scoreboard {
 			}
 
 			for($i=0;$i < @sorted; $i++) {
-				last unless $i < $JKFlow::SCOREKEEP;
+				last unless $i < $ref->{scorekeep};
 				my $tuplekey = $sorted[$i];
 				
 				if (!defined $newaggdata->{$tuplekey}) { # Add this to aggdata 1x
@@ -1967,8 +2025,6 @@ sub scoreboard {
 	##### AGGDATA ######
 	&countAggdata($dir,$ref->{aggregate}{report},\%{$newaggdata},$self->{filetime});
 
-	delete $ref->{count};
-	delete $ref->{tuple};
 	undef $newaggdata;
 	return;
 }
