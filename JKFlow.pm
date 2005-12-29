@@ -1356,7 +1356,8 @@ EOF
 		} elsif ($drop == 0) {
 			$typeos="CS".$class;
 			#print "CS=".$typeos."\n";
-		} elsif ($class == 5 && $drop == 0) {
+		} elsif ($class == 5 && $drop == 3) {
+		#} elsif ($class == 5 && $drop == 0) {
 			$typeos="EF";
 			#print "DSCP=".$typeos."\n";
 		} else {
