@@ -692,66 +692,50 @@ sub plotreport {
                     }
                }
           }
-          if (param('protocol_stacked')) {
-               my $protocolvaluesaccumulated=[];
-               foreach my $direction (sort keys %{$subdir{protocol}} ) {
-                    foreach my $protocol (sort keys %{$subdir{protocol}{$direction}}) {
-                         my $protocolvalues=[];
+          if (param('tuples_stacked')) {
+               my $tuplevaluesaccumulated=[];
+               foreach my $direction (sort keys %{$subdir{tuples}} ) {
+                    foreach my $tuple (sort keys %{$subdir{tuples}{$direction}}) {
+                         my $tuplevalues=[];
                          my $i=0;
                          foreach my $time (@times) {
-                              if (defined $dbhash->{data}{$time}{$direction}{protocol}{$protocol}) {
+                              if (defined ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]) {
                                    if ($which eq 'in') {
-                                        $protocolvaluesaccumulated->[$i] -= ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[0+$reporttype]/$div;
+                                        $tuplevaluesaccumulated->[$i] -= ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]/$div;
                                    } else {
-                                        $protocolvaluesaccumulated->[$i] += ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[1+$reporttype]/$div;
+                                        $tuplevaluesaccumulated->[$i] += ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[1+$reporttype]/$div;
                                    }
                               } else {
-                                   $protocolvaluesaccumulated->[$i] += 0;
+                                   $tuplevaluesaccumulated->[$i] += 0;
                               }
                               $i++;
                          }
-                         push @{$protocolvalues},@{$protocolvaluesaccumulated};
-                         unshift @{$graphdata},$protocolvalues;
+                         push @{$tuplevalues},@{$tuplevaluesaccumulated};
+                         unshift @{$graphdata},$tuplevalues;
                          unshift @{$graphtype},'area';
-                         if (param('predefinedcolors')) {
-                              unshift @{$graphcolor}, $definedcolors->{$protocol};
-                         } else {
-                              unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
-                         }
-                         if ($which eq 'out') {
-                              unshift @{$graphlegend}, "Protocol ".$protocol." ".$direction;
-                         } else {
-                              unshift @{$graphlegend}, undef;
-                         }
+                         unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
+                         unshift @{$graphlegend}, "Tuple ".$tuple." ".$direction;
                     }
                }
           } else {
-               foreach my $direction (sort keys %{$subdir{protocol}} ) {
-                    foreach my $protocol (sort keys %{$subdir{protocol}{$direction}}) {
-                         my $protocolvalues=[];
+               foreach my $direction (sort keys %{$subdir{tuples}} ) {
+                    foreach my $tuple (sort keys %{$subdir{tuples}{$direction}}) {
+                         my $tuplevalues=[];
                          foreach my $time (@times) {
-                              if (defined $dbhash->{data}{$time}{$direction}{protocol}{$protocol}) {
+                              if (defined ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]) {
                                    if ($which eq 'in') {
-                                        push @{$protocolvalues}, -${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[0+$reporttype]/$div;
+                                        push @{$tuplevalues}, -${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]/$div;
                                    } else {
-                                        push @{$protocolvalues}, ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[1+$reporttype]/$div;
+                                        push @{$tuplevalues}, ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[1+$reporttype]/$div;
                                    }
                               } else {
-                                   push @{$protocolvalues},0;
+                                   push @{$tuplevalues},0;
                               }
                          }
-                         unshift @{$graphdata},$protocolvalues;
+                         unshift @{$graphdata},$tuplevalues;
                          unshift @{$graphtype},'lines';
-                         if (param('predefinedcolors')) {
-                              unshift @{$graphcolor}, $definedcolors->{$protocol};
-                         } else {
-                              unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
-                         }
-                         if ($which eq 'out') {
-                              unshift @{$graphlegend}, "Protocol ".$protocol." ".$direction;
-                         } else {
-                              unshift @{$graphlegend}, undef;
-                         }
+                         unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
+                         unshift @{$graphlegend}, "Tuple ".$tuple." ".$direction;
                     }
                }
           }
@@ -881,51 +865,66 @@ sub plotreport {
                     }
                }
           }
-
-          if (param('tuples_stacked')) {
-               my $tuplevaluesaccumulated=[];
-               foreach my $direction (sort keys %{$subdir{tuples}} ) {
-                    foreach my $tuple (sort keys %{$subdir{tuples}{$direction}}) {
-                         my $tuplevalues=[];
+          if (param('protocol_stacked')) {
+               my $protocolvaluesaccumulated=[];
+               foreach my $direction (sort keys %{$subdir{protocol}} ) {
+                    foreach my $protocol (sort keys %{$subdir{protocol}{$direction}}) {
+                         my $protocolvalues=[];
                          my $i=0;
                          foreach my $time (@times) {
-                              if (defined ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]) {
+                              if (defined $dbhash->{data}{$time}{$direction}{protocol}{$protocol}) {
                                    if ($which eq 'in') {
-                                        $tuplevaluesaccumulated->[$i] -= ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]/$div;
+                                        $protocolvaluesaccumulated->[$i] -= ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[0+$reporttype]/$div;
                                    } else {
-                                        $tuplevaluesaccumulated->[$i] += ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[1+$reporttype]/$div;
+                                        $protocolvaluesaccumulated->[$i] += ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[1+$reporttype]/$div;
                                    }
                               } else {
-                                   $tuplevaluesaccumulated->[$i] += 0;
+                                   $protocolvaluesaccumulated->[$i] += 0;
                               }
                               $i++;
                          }
-                         push @{$tuplevalues},@{$tuplevaluesaccumulated};
-                         unshift @{$graphdata},$tuplevalues;
+                         push @{$protocolvalues},@{$protocolvaluesaccumulated};
+                         unshift @{$graphdata},$protocolvalues;
                          unshift @{$graphtype},'area';
-                         unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
-                         unshift @{$graphlegend}, "Tuple ".$tuple." ".$direction;
+                         if (param('predefinedcolors')) {
+                              unshift @{$graphcolor}, $definedcolors->{$protocol};
+                         } else {
+                              unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
+                         }
+                         if ($which eq 'out') {
+                              unshift @{$graphlegend}, "Protocol ".$protocol." ".$direction;
+                         } else {
+                              unshift @{$graphlegend}, undef;
+                         }
                     }
                }
           } else {
-               foreach my $direction (sort keys %{$subdir{tuples}} ) {
-                    foreach my $tuple (sort keys %{$subdir{tuples}{$direction}}) {
-                         my $tuplevalues=[];
+               foreach my $direction (sort keys %{$subdir{protocol}} ) {
+                    foreach my $protocol (sort keys %{$subdir{protocol}{$direction}}) {
+                         my $protocolvalues=[];
                          foreach my $time (@times) {
-                              if (defined ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]) {
+                              if (defined $dbhash->{data}{$time}{$direction}{protocol}{$protocol}) {
                                    if ($which eq 'in') {
-                                        push @{$tuplevalues}, -${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[0+$reporttype]/$div;
+                                        push @{$protocolvalues}, -${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[0+$reporttype]/$div;
                                    } else {
-                                        push @{$tuplevalues}, ${$dbhash->{data}{$time}{$direction}{tuples}{$tuple}}[1+$reporttype]/$div;
+                                        push @{$protocolvalues}, ${$dbhash->{data}{$time}{$direction}{protocol}{$protocol}}[1+$reporttype]/$div;
                                    }
                               } else {
-                                   push @{$tuplevalues},0;
+                                   push @{$protocolvalues},0;
                               }
                          }
-                         unshift @{$graphdata},$tuplevalues;
+                         unshift @{$graphdata},$protocolvalues;
                          unshift @{$graphtype},'lines';
-                         unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
-                         unshift @{$graphlegend}, "Tuple ".$tuple." ".$direction;
+                         if (param('predefinedcolors')) {
+                              unshift @{$graphcolor}, $definedcolors->{$protocol};
+                         } else {
+                              unshift @{$graphcolor}, $randomcolors->[int(rand 24)];
+                         }
+                         if ($which eq 'out') {
+                              unshift @{$graphlegend}, "Protocol ".$protocol." ".$direction;
+                         } else {
+                              unshift @{$graphlegend}, undef;
+                         }
                     }
                }
           }
