@@ -34,10 +34,10 @@ carpout(*LOG);
 ### Important: check the %definedcolors keys with /etc/services, or
 ### the default colors won't work! (these are defined for RedHat 9.0/Fedora)
 
-# directory with rrd files
-my $rrddir = "/var/flows/reports/rrds";
 # directory with db files
 my $dbdir = "/var/flows/reports/db";
+# gunzip/bunzip binary
+my $unzip = "/usr/bin/bunzip2"; my $zipextention = "bz2";
 # default number of hours to go back
 my $hours = 48;
 # duration of graph, starting from $hours ago
@@ -60,16 +60,8 @@ my $graphlegend = [];
 $| = 1;
 my $query = new CGI;
 # Open latest JKFlow database
-opendir(DIR, $dbdir) or &browserDie("open $dbdir failed ($!)");
-my $latestdbfile = "0";
-while ( $_ = readdir( DIR ) ) {
-    if ($_ =~ /jkflow-10-(\d+).db/ && $1 > $latestdbfile) {
-        $latestdbfile=$1;
-    }
-}
-my $db = new DBM::Deep (
-  file => $dbdir."/jkflow-10-".$latestdbfile.".db",
-  mode => 'r' );
+my $db;
+&openlatestdb();
 
 my $dbhash = {};
 
@@ -187,6 +179,30 @@ my @arg;
 &doReport();
 
 ################################################################
+
+# Open latest JKFlow database
+
+sub openlatestdb {
+	opendir(DIR, $dbdir) or &browserDie("open $dbdir failed ($!)");
+	my $latesttimestamp = "0";
+	my $latestdbfile;
+	while ( $_ = readdir( DIR ) ) {
+		if ($_ =~ /^jkflow-10-(\d+).db/ && $1 > $latesttimestamp) {
+			$latesttimestamp=$1;
+			$latestdbfile=$_;
+		}
+	}
+
+	if ($latestdbfile =~ m/(.*).$zipextention/) {
+		system "$unzip $dbdir/$latestdbfile";
+		$latestdbfile=$1;
+	}
+
+	$db = new DBM::Deep (
+		file => "$dbdir/$latestdbfile"
+		,mode => 'r'
+	);
+}
 
 # Image generation and display
 
@@ -358,17 +374,6 @@ sub showMenu {
      exit;
 }
 
-sub getFilename {
-     my $r = shift;
-     my $subkey = shift;
-     my $file=$rrddir;
-
-     $file .= '/'.$r.'/'.$subkey;
-
-     -f $file or &browserDie("Cannot find file $file, R=$r, Subkey=$subkey");
-     return $file;
-}
-
 sub browserDie {
     print header;
     print start_html( -title => 'Error Occurred',
@@ -452,32 +457,17 @@ my $direction = shift;
      @_ = grep { s/^tos_(.*)\.rrd$/$1/ } sort keys %{$db->{config}{$direction}};
 }
 
-# Generate list of available Tuples
-sub getTuplesList {
-my $direction = shift;
-my $tuplelist = {};
-    opendir(DIR, $dbdir) or &browserDie("open $dbdir failed ($!)");
-    while( $_ = readdir( DIR ) ) {
-      if ($_ =~ m/jkflow-(\d+)-(\d+).db/ &&  time - $hours*60*60 - $1*$sampleperiod < $2 && time - $hours*60*60 + $duration*60*60 > $2 ) {
-        my $dbtemp = new DBM::Deep (
-          file => $dbdir."/".$_,
-          mode => 'r'
-        );
-        foreach my $tuple (keys %{$dbtemp->{config}{$direction}{tuples}}) {
-            $tuplelist->{$tuple}=1;
-        }
-      }
-    }
-    closedir DIR;
-    return sort keys %{$tuplelist};
-}
-
 sub getDBContent {
     opendir(DIR, $dbdir) or &browserDie("open $dbdir failed ($!)");
-    while( $_ = readdir( DIR ) ) {
-      if ($_ =~ m/jkflow-(\d+)-(\d+).db/ &&  time - $hours*60*60 - $1*$sampleperiod < $2 && time - $hours*60*60 + $duration*60*60 > $2 ) {
+    my $file;
+    while( $file = readdir( DIR ) ) {
+      if ($file =~ m/^jkflow-(\d+)-(\d+).db/ &&  time - $hours*60*60 - $1*$sampleperiod < $2 && time - $hours*60*60 + $duration*60*60 > $2 ) {
+        if ($file =~ m/(.*).$zipextention$/) {
+           system "$unzip $dbdir/$file";
+           $file=$1;
+        }
         my $dbtemp = new DBM::Deep (
-          file => $dbdir."/".$_,
+          file => $dbdir."/".$file,
           mode => 'r'
         );
         foreach my $direction ( @directions ) {
